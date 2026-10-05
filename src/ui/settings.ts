@@ -72,7 +72,7 @@ export function mountSettings(root: HTMLElement): void {
       <p class="hint">設定と時刻表は端末に保存します。位置情報・連絡先・マイクは使用しません。乗車モードは手動で開始し、予定時刻で次の行動を切り替えます。列車への乗車・実際の到着を検知する機能ではありません。</p>
       <details><summary>デバッグ情報・バージョン</summary><pre id="debug"></pre></details>
     </section>
-  </main><footer>Transit HUD 0.2.0 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
+  </main><footer>Transit HUD 0.2.1 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
 }
 export function updateHud(root: HTMLElement, model: HudModel): void {
   root.querySelector('#hud')!.innerHTML = `<p class="hud-title">${e(model.title)}</p><p class="hud-action">${e(model.action)}</p>
@@ -95,19 +95,24 @@ export function favoriteEditor(root: HTMLElement, data: Timetable | null, favori
     <button type="button" class="secondary" data-action="swap-stations">出発・到着を入れ替える</button>
     <label>最初に乗る路線（複数選択可 / 未選択なら全て）<select name="lines" multiple size="3">${data.lines.map(l => `<option value="${e(l.id)}" ${f?.lineIds.includes(l.id) ? 'selected' : ''}>${e(l.name)} · ${e(l.id)}</option>`).join('')}</select></label>
     <div class="two"><label>方面<select name="direction"><option value="">指定なし</option><option value="0" ${f?.direction === '0' ? 'selected' : ''}>0 · GTFSの方向</option><option value="1" ${f?.direction === '1' ? 'selected' : ''}>1 · GTFSの方向</option></select></label>
-    <label>最大乗換<select name="transfers"><option value="0" ${f?.maxTransfers === 0 ? 'selected' : ''}>直通のみ</option><option value="1" ${(f?.maxTransfers ?? 1) === 1 ? 'selected' : ''}>1回</option></select></label></div>
+    <label>最大乗換<select name="transfers"><option value="0" ${f?.maxTransfers === 0 ? 'selected' : ''}>直通のみ</option><option value="1" ${(f?.maxTransfers ?? 1) === 1 ? 'selected' : ''}>1回</option><option value="2" ${f?.maxTransfers === 2 ? 'selected' : ''}>2回</option></select></label></div>
     <div class="three"><label>徒歩（分）<input type="number" name="walk" min="0" max="120" step="0.5" value="${f?.walkingMinutes ?? 7}" required></label>
       <label>発車前余裕（分）<input type="number" name="buffer" min="0" max="120" step="0.5" value="${f?.bufferMinutes ?? 2}" required></label>
       <label>乗換余裕（分）<input type="number" name="transferBuffer" min="0" max="120" step="0.5" value="${f?.transferMinutes ?? 4}" required></label></div>
-    ${picker('transferAt', '乗換駅（任意）', f?.transferAt ?? '', true)}
+    ${picker('transferAt', '最初の乗換駅（任意）', f?.transferAt ?? '', true)}
+    <div id="second-transfer-picker">${picker('secondTransferAt', '2つ目の乗換駅（任意）', f?.secondTransferAt ?? '', true)}</div>
     <details ${f?.via.length ? 'open' : ''}><summary>経由駅・路線の詳しい条件</summary>
     ${[0, 1, 2].map(i => picker(`via${i}`, `経由駅${i + 1}（順番に指定）`, f?.via[i] ?? '', true)).join('')}
     <div class="two"><label>優先路線ID<input name="preferred" value="${e(f?.preferredLines.join(',') ?? '')}" placeholder="カンマ区切り"></label><label>使わない路線ID<input name="excluded" value="${e(f?.excludedLines.join(',') ?? '')}" placeholder="カンマ区切り"></label></div>
-    <label>固定経路の路線ID（乗車順）<input name="fixed" value="${e(f?.fixedPath.join(',') ?? '')}" placeholder="直通なら1路線、乗換なら2路線"></label>
+    <label>固定経路の路線ID（乗車順）<input name="fixed" value="${e(f?.fixedPath.join(',') ?? '')}" placeholder="直通なら1路線、乗換なら2〜3路線"></label>
     </details><p>使用曜日（祝日の運行日は時刻表が決定）</p><div class="days">${checks('days', f?.days ?? [0, 1, 2, 3, 4, 5, 6])}</div>
     <details ${f?.auto ? 'open' : ''}><summary>時間帯による自動切替</summary><label class="check"><input type="checkbox" name="auto" ${f?.auto ? 'checked' : ''}>この時間帯に自動選択</label>
       <div class="two"><label>開始<input type="time" name="autoStart" value="${e(f?.auto?.start ?? '07:00')}"></label><label>終了<input type="time" name="autoEnd" value="${e(f?.auto?.end ?? '10:00')}"></label></div>
       <div class="days">${checks('autoDays', f?.auto?.days ?? [1, 2, 3, 4, 5])}</div><p class="hint">手動で選んだ日は手動選択を優先します。日付が変わると自動切替を再開します。</p></details>
     <div class="actions"><button type="submit">${f ? '変更を保存' : 'ルートを登録'}</button>${f ? '<button type="button" data-action="new-favorite" class="secondary">新規登録へ</button>' : ''}</div></form>`;
   bindStationSearch(container as HTMLElement, data);
+  const transfers = container.querySelector<HTMLSelectElement>('[name="transfers"]')!;
+  const second = container.querySelector<HTMLElement>('#second-transfer-picker')!;
+  const toggleSecond = () => { second.hidden = transfers.value !== '2'; for (const field of second.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select')) field.disabled = second.hidden; };
+  transfers.addEventListener('change', toggleSecond); toggleSecond();
 }

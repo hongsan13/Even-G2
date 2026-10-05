@@ -37,7 +37,7 @@ export interface FavoriteRoute {
   lineIds: string[]; direction: Direction; via: string[];
   walkingMinutes: number; bufferMinutes: number; transferMinutes: number;
   days: number[]; preferredLines: string[]; excludedLines: string[];
-  fixedPath: string[]; transferAt?: string; maxTransfers: 0 | 1; auto?: AutoSwitch;
+  fixedPath: string[]; transferAt?: string; secondTransferAt?: string; maxTransfers: 0 | 1 | 2; auto?: AutoSwitch;
 }
 export interface Settings {
   schema: 1; favorites: FavoriteRoute[]; activeId: string;

@@ -7,9 +7,10 @@ export function emptySettings(): Settings { return { schema: 1, favorites: [], a
 export function validateFavorite(f: FavoriteRoute, data: Timetable): void {
   if (!f.name.trim() || Array.from(f.name).length > 24) throw new Error('表示名は1〜24文字にしてください');
   const ids = new Set(data.stations.map(s => s.id));
-  if (!ids.has(f.from) || !ids.has(f.to) || f.from === f.to || f.via.some(v => !ids.has(v)) || f.transferAt && !ids.has(f.transferAt)) throw new Error('出発・到着・経由駅を確認してください');
+  if (!ids.has(f.from) || !ids.has(f.to) || f.from === f.to || f.via.some(v => !ids.has(v)) || f.transferAt && !ids.has(f.transferAt) || f.secondTransferAt && !ids.has(f.secondTransferAt)) throw new Error('出発・到着・経由駅を確認してください');
   if (![f.walkingMinutes, f.bufferMinutes, f.transferMinutes].every(n => Number.isFinite(n) && n >= 0 && n <= 120)) throw new Error('徒歩・余裕時間は0〜120分にしてください');
-  if (![0, 1].includes(f.maxTransfers)) throw new Error('乗換は0回または1回にしてください');
+  if (![0, 1, 2].includes(f.maxTransfers)) throw new Error('乗換は0〜2回にしてください');
+  if (f.secondTransferAt && f.maxTransfers !== 2) throw new Error('2つ目の乗換駅を指定するときは最大乗換を2回にしてください');
   const lines = new Set(data.lines.map(l => l.id));
   if ([...f.lineIds, ...f.preferredLines, ...f.excludedLines, ...f.fixedPath].some(id => !lines.has(id))) throw new Error('路線IDを確認してください');
   if (f.fixedPath.length > f.maxTransfers + 1) throw new Error('固定経路の路線数が最大乗換回数を超えています');

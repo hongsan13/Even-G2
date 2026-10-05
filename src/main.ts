@@ -60,7 +60,7 @@ function metadata(): void {
   targets.value = previousTarget;
   root.querySelector<HTMLInputElement>('#auto-update')!.checked = autoUpdate;
   root.querySelector('#connection')!.textContent = nativeLabel;
-  root.querySelector('#debug')!.textContent = `Transit HUD 0.2.0\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 1 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
+  root.querySelector('#debug')!.textContent = `Transit HUD 0.2.1\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
 }
 function refreshControls(preserveEditor = false): void {
   const previous = preserveEditor ? root.querySelector<HTMLFormElement>('#favorite-form') : null;
@@ -76,6 +76,7 @@ function refreshControls(preserveEditor = false): void {
       else if (element instanceof HTMLSelectElement && element.multiple) for (const option of element.options) option.selected = values.includes(option.value);
       else if (values.length) element.value = values[0];
     }
+    form?.querySelector<HTMLSelectElement>('[name="transfers"]')?.dispatchEvent(new Event('change'));
     for (const [name, value] of searches) { const input = form?.querySelector<HTMLInputElement>(`[data-station-search="${name}"]`); if (input) input.value = value; }
   }
   const form = root.querySelector<HTMLFormElement>('#preferences-form')!;
@@ -329,10 +330,10 @@ root.addEventListener('submit', event => {
       case 'favorite-form': {
         const data = dataset(); if (!data) throw new Error('時刻表がありません');
         const f: FavoriteRoute = { id: text('id') || crypto.randomUUID(), name: text('name') || Array.from(`${data.stations.find(s => s.id === text('from'))?.name ?? ''}→${data.stations.find(s => s.id === text('to'))?.name ?? ''}`).slice(0, 24).join(''), from: text('from'), to: text('to'),
-          lineIds: fields.getAll('lines').map(String), direction: text('direction') as FavoriteRoute['direction'], via: [text('via0'), text('via1'), text('via2')].filter(Boolean), transferAt: text('transferAt') || undefined,
+          lineIds: fields.getAll('lines').map(String), direction: text('direction') as FavoriteRoute['direction'], via: [text('via0'), text('via1'), text('via2')].filter(Boolean), transferAt: text('transferAt') || undefined, secondTransferAt: text('transfers') === '2' ? text('secondTransferAt') || undefined : undefined,
           walkingMinutes: Number(text('walk')), bufferMinutes: Number(text('buffer')), transferMinutes: Number(text('transferBuffer')),
           days: numbers('days'), preferredLines: ids('preferred'), excludedLines: ids('excluded'), fixedPath: ids('fixed'),
-          maxTransfers: Number(text('transfers')) as 0 | 1,
+          maxTransfers: Number(text('transfers')) as 0 | 1 | 2,
           auto: fields.has('auto') ? { days: numbers('autoDays'), start: text('autoStart'), end: text('autoEnd') } : undefined };
         validateFavorite(f, data);
         const favorites = settings.favorites.filter(old => old.id !== f.id); favorites.push(f);

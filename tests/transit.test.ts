@@ -118,3 +118,52 @@ it('あとに出る速い便がある場合は、乗車可能な最速到着を�
   expect(recommendedDeparture(departures)?.journey.legs[0].tripId).toBe('fast');
   expect(departures[0].journey.legs[0].tripId).toBe('slow');
 });
+describe('2回乗換', () => {
+  const timetable = () => {
+    const d = data([trip('first', [['A', '13:40'], ['B', '13:50']]), trip('middle', [['B', '13:54'], ['C', '14:04']], 'L2'), trip('tight', [['C', '14:07'], ['D', '14:15']], 'L3'), trip('last', [['C', '14:08'], ['D', '14:20']], 'L3')]);
+    d.lines.push({ id: 'L3', name: 'L3' }); return d;
+  };
+  const f = favorite({ to: 'D', maxTransfers: 2 });
+  it('3本の列車をつなぎ、両方の乗換で余裕を満たす便を選ぶ', () => {
+    const result = findJourneys(timetable(), f, time('13:30'))[0];
+    expect(result.transfers).toBe(2); expect(result.legs.map(l => l.tripId)).toEqual(['first', 'middle', 'last']);
+    expect(result.arrival).toBe(time('14:20'));
+    expect(findJourneys(timetable(), { ...f, maxTransfers: 1 }, time('13:30'))).toEqual([]);
+  });
+  it('2回目の乗換にも明示的な最低時間・禁止を適用', () => {
+    const d = timetable(); d.transfers = [{ from: 'C', to: 'C', seconds: 300, prohibited: false }];
+    expect(findJourneys(d, f, time('13:30'))).toEqual([]);
+    d.transfers = [{ from: 'C', to: 'C', seconds: 0, prohibited: true }];
+    expect(findJourneys(d, f, time('13:30'))).toEqual([]);
+  });
+  it('中間便・最終便の運休や遅延でつながらない経路を除外', () => {
+    const now = time('13:30');
+    for (const tripId of ['middle', 'last']) expect(findJourneys(timetable(), f, now, [{ tripId, serviceDate: '20261005', canceled: true, updatedAt: now }]).some(j => j.legs[0].serviceDate === '20261005')).toBe(false);
+    expect(findJourneys(timetable(), f, now, [{ tripId: 'middle', serviceDate: '20261005', delaySeconds: 60, updatedAt: now }]).some(j => j.legs[0].serviceDate === '20261005')).toBe(false);
+  });
+  it('順番付きの経由駅・3路線の固定経路・除外路線を守る', () => {
+    const result = findJourneys(timetable(), { ...f, via: ['B', 'C'], fixedPath: ['L1', 'L2', 'L3'], transferAt: 'B' }, time('13:30'));
+    expect(result[0].legs).toHaveLength(3);
+    expect(findJourneys(timetable(), { ...f, via: ['C', 'B'] }, time('13:30'))).toEqual([]);
+    expect(findJourneys(timetable(), { ...f, excludedLines: ['L2'] }, time('13:30'))).toEqual([]);
+    expect(findJourneys(timetable(), { ...f, transferAt: 'C' }, time('13:30'))).toEqual([]);
+  });
+  it('後発の速い最終便も調べ、到着同時なら少ない乗換を選ぶ', () => {
+    const d = timetable(); d.trips.push(trip('fast', [['C', '14:09'], ['D', '14:12']], 'L3'));
+    expect(findJourneys(d, f, time('13:30'))[0].legs[2].tripId).toBe('fast');
+    d.trips[0].stops.push({ stopId: 'D', sequence: 3, arrival: 14 * 3600 + 12 * 60, departure: 14 * 3600 + 12 * 60, pickup: true, dropoff: true });
+    expect(findJourneys(d, f, time('13:30'))[0].transfers).toBe(0);
+  });
+  it('24時を越える2回乗換を同じ営業日として扱う', () => {
+    const d = data([trip('first', [['A', '23:50'], ['B', '23:55']]), trip('middle', [['B', '23:59'], ['C', '24:05']], 'L2'), trip('last', [['C', '24:09'], ['D', '24:20']], 'L3')]);
+    d.lines.push({ id: 'L3', name: 'L3' });
+    const result = findJourneys(d, f, time('23:40'))[0];
+    expect(result.legs).toHaveLength(3); expect(result.arrival).toBe(time('24:20')); expect(result.legs.every(l => l.serviceDate === '20261005')).toBe(true);
+  });
+});
+it('2つ目の乗換駅を指定した場合は、その駅での3区間経路を選ぶ', () => {
+  const d = data([trip('first', [['A', '13:40'], ['B', '13:50']]), trip('middle', [['B', '13:54'], ['C', '14:04']], 'L2'), trip('last', [['C', '14:08'], ['D', '14:20']], 'L3')]);
+  d.lines.push({ id: 'L3', name: 'L3' });
+  expect(findJourneys(d, favorite({ to: 'D', maxTransfers: 2, transferAt: 'B', secondTransferAt: 'C' }), time('13:30'))[0].transfers).toBe(2);
+  expect(findJourneys(d, favorite({ to: 'D', maxTransfers: 2, secondTransferAt: 'B' }), time('13:30'))).toEqual([]);
+});

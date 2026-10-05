@@ -43,7 +43,7 @@ test('添付都営GTFS 20260921の取込・大江戸線次発3本・保存・オ
   expect(errors).toEqual([]);
 });
 
-test('実データの練馬春日町→牛込神楽坂・1回乗換検索中も画面操作できる', async ({ page }) => {
+test('実データの練馬春日町→牛込神楽坂・2回乗換検索中も画面操作できる', async ({ page }) => {
   test.skip(!file, 'TOEI_GTFS_ZIPに公式ZIPを指定してください');
   await page.addInitScript(() => {
     (window as any).flutter_inappwebview = { callHandler: async (_handler: string, raw: string) => {
@@ -70,7 +70,7 @@ test('実データの練馬春日町→牛込神楽坂・1回乗換検索中も�
   await route.locator('[name="name"]').fill('自宅→理科大');
   await route.locator('[name="from"]').selectOption('438');
   await route.locator('[name="to"]').selectOption('406');
-  await route.locator('[name="transfers"]').selectOption('1');
+  await route.locator('[name="transfers"]').selectOption('2');
   await route.getByText('経由駅・路線の詳しい条件', { exact: true }).click();
   await route.locator('[name="via0"]').selectOption('429');
   const cdp = await page.context().newCDPSession(page);
