@@ -1,0 +1,66 @@
+import { test, expect } from '@playwright/test';
+import { railways, stations, trains, meta, railway } from '../odptFixtures';
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { localStorage.setItem('transit-hud.auto-update', 'false'); localStorage.setItem('transit-hud.initial-data', 'disabled'); });
+});
+test('公式形式のJSONをWorkerで取り込み、駅名検索・保存復元・補正制限', async ({ page, context }) => {
+  const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+  await page.goto('/'); await expect(page.locator('#connection')).toHaveText('ブラウザ · G2未接続');
+  await page.getByText('GTFS以外：公式の列車時刻表JSONファイルを追加', { exact: true }).click();
+  const form = page.locator('#odpt-file-form');
+  for (const [name, value] of Object.entries({ title: meta.title, source: meta.source, license: meta.license, start: meta.start, end: meta.end, holidays: meta.holidays.join(' ') })) await form.locator(`[name="${name}"]`).fill(value);
+  await form.locator('[name="licenseKind"]').selectOption('other');
+  for (const [name, records] of Object.entries({ railways, stations, trains })) await form.locator(`[name="${name}"]`).setInputFiles({ name: `${name}.json`, mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(records)) });
+  await form.locator('[name="confirmed"]').check(); await form.locator('[name="terms"]').check();
+  await form.getByRole('button', { name: '列車時刻表JSONを端末から取り込む' }).click();
+  await expect(page.locator('#dataset')).toContainText('2駅 / 1路線 / 1便');
+  await page.locator('#favorite-form [aria-label="出発駅を駅名で検索"]').fill('架空駅A');
+  await page.locator('#favorite-form [name="from"]').selectOption({ label: '架空駅A · 架空試験線' });
+  await page.getByRole('button', { name: 'ルートを登録', exact: true }).click();
+  await expect(page.locator('#routes')).toContainText('架空駅A');
+  await expect(page.locator('#timetable-editor')).toContainText('補正できません');
+  await page.reload();
+  await expect(page.locator('#connection')).toHaveText('ブラウザ · G2未接続');
+  await context.setOffline(true);
+  await expect(page.locator('#dataset')).toContainText(meta.title);
+  await expect(page.locator('#routes')).toContainText('架空駅A');
+  expect(errors).toEqual([]);
+});
+test('認証JSONの路線選択・オンライン更新、トークン非保存', async ({ page }) => {
+  await page.addInitScript(({ railways, stations, trains }) => {
+    const original = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const url = new URL(String(input), location.href);
+      if (url.origin !== 'https://api-challenge.odpt.org') return original(input, init);
+      if (url.searchParams.get('acl:consumerKey') !== 'synthetic-browser-token') throw new Error('Token unavailable');
+      const data = url.pathname.endsWith('TrainTimetable') ? trains : url.pathname.endsWith('Station') ? stations : railways;
+      return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    };
+  }, { railways, stations, trains });
+  await page.goto('/'); await expect(page.locator('#connection')).toHaveText('ブラウザ · G2未接続');
+  await page.locator('#odpt-auth summary').click();
+  await page.locator('[name="challengeKey"]').fill('synthetic-browser-token');
+  await page.getByRole('button', { name: '今回の利用中だけトークンを設定' }).click();
+  await expect(page.locator('[name="challengeKey"]')).toHaveValue('');
+  await expect(page.locator('#auth-state')).toContainText('チャレンジ2026：設定済み');
+  await page.locator('#odpt-online summary').click();
+  await page.getByRole('button', { name: 'この事業者の路線一覧を取得' }).click();
+  const form = page.locator('#odpt-online-form');
+  await expect(form.locator('[name="railway"]')).toContainText('架空試験線');
+  await form.locator('[name="railway"]').selectOption(railway);
+  await form.locator('[name="start"]').fill(meta.start); await form.locator('[name="end"]').fill(meta.end);
+  await form.locator('[name="holidays"]').fill(meta.holidays.join(' ')); await form.locator('[name="confirmed"]').check();
+  await form.getByRole('button', { name: '選択した路線の公式JSONを取り込む' }).click();
+  await expect(page.locator('#dataset')).toContainText('2駅 / 1路線 / 1便');
+  await page.locator('#remote-settings summary').click();
+  await page.getByRole('button', { name: '保存済みデータを更新', exact: true }).click();
+  await expect(page.locator('#status')).toContainText('更新確認が完了');
+  await expect(page.locator('#feed-list .feed-row')).toHaveCount(1);
+  const local = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
+  expect(local).not.toContain('synthetic-browser-token');
+  await page.reload(); await expect(page.locator('#dataset')).toContainText('2駅 / 1路線 / 1便');
+  await expect(page.locator('#auth-state')).toContainText('チャレンジ2026：未設定');
+  await page.locator('#remote-settings summary').click(); await page.getByRole('button', { name: '保存済みデータを更新', exact: true }).click();
+  await expect(page.locator('#status')).toContainText('保存済み時刻表を使用');
+  await expect(page.locator('#dataset')).toContainText('2駅 / 1路線 / 1便');
+});

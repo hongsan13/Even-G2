@@ -2,14 +2,14 @@ export interface Station { id: string; name: string; parentId?: string; platform
 export interface Line { id: string; name: string; agencyId?: string }
 export type Direction = '0' | '1' | '';
 export interface StopTime { stopId: string; sequence: number; arrival: number | null; departure: number | null; pickup: boolean; dropoff: boolean }
-export interface Trip { id: string; routeId: string; serviceId: string; direction: Direction; headsign: string; kind?: string; stops: StopTime[] }
+export interface Trip { id: string; routeId: string; serviceId: string; direction: Direction; headsign: string; kind?: string; stops: StopTime[]; readOnly?: boolean }
 export interface Route { id: string; lineIds: string[]; stopIds: string[] }
 export interface Transfer { from: string; to: string; seconds: number; prohibited: boolean }
 export interface Calendar { id: string; start: string; end: string; days: boolean[] }
 export interface CalendarException { serviceId: string; date: string; added: boolean }
 export interface Timetable {
   schema: 1; id: string; title: string; source: string; license: string; timezone: 'Asia/Tokyo';
-  importedAt: number; version?: string; validUntil?: string; demo: boolean;
+  importedAt: number; version?: string; validUntil?: string; demo: boolean; licenseUntil?: string;
   stations: Station[]; lines: Line[]; trips: Trip[]; calendars: Calendar[];
   exceptions: CalendarException[]; transfers: Transfer[];
 }

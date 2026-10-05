@@ -16,11 +16,14 @@ import { importGtfs, refreshGtfs, publicHttpsUrl, type RemoteCache } from './tra
 import { decodeRealtime, fetchRealtime } from './transit/realtime';
 import type { Departure, FavoriteRoute, Settings, RealtimeUpdate, Journey, Timetable } from './transit/types';
 import { jstDate, jstWeekday, clock } from './utils/time';
-import { FEED_CATALOG, TOEI_FEED, PUBLIC_FEED_ORIGINS } from './config';
-import { savedFeeds, putFeed, mergeFeeds, type SavedFeed } from './transit/feeds';
+import { ALL_FEEDS, TOEI_FEED, PUBLIC_FEED_ORIGINS, type AuthKind, isAuthFeed, AUTH_FEEDS } from './config';
+import { savedFeeds, putFeed, mergeFeeds, removeExpiredLicensedFeeds, type SavedFeed } from './transit/feeds';
 import { applyEdits, retainEdits, type TimetableEdit } from './transit/edits';
 import { timetableEditor, transferEditor } from './ui/timetable';
 import { parseServiceTime } from './utils/time';
+import { importOdpt, fetchOdpt, ODPT_OPERATORS, JSON_LIMIT, CHALLENGE_END } from './transit/odpt/loader';
+import type { OdptMetadata } from './transit/odpt/parser';
+import { refreshAuthGtfs, protectTimetable } from './transit/odpt/authGtfs';
 
 const root = document.querySelector<HTMLElement>('#app')!;
 mountSettings(root);
@@ -35,6 +38,7 @@ let departures: Departure[] = [], computed: Journey[] = [], computedKey = '', co
 let interval: ReturnType<typeof setInterval> | undefined;
 let autoUpdate = true;
 let remote = { gtfsUrl: '', realtimeUrl: '' }, lastRemoteCheck = 0, lastRealtimeCheck = 0;
+const authKeys: Record<AuthKind, string> = { odpt: '', challenge: '' };
 let storageLabel = '未確認', nativeLabel = '接続確認中';
 const dataset = () => cache?.data ?? null;
 const active = () => settings.favorites.find(f => f.id === settings.activeId);
@@ -47,20 +51,25 @@ const search = new JourneySearch();
 let searchGeneration = 0, searching = false, searchError = '';
 function invalidate(): void { searchGeneration++; search.cancel(); computedKey = ''; computed = []; searching = false; searchError = ''; }
 function metadata(): void {
+  updateAuthState();
   const data = dataset();
   root.querySelector('#dataset')!.innerHTML = data ? `<strong>${escapeHtml(data.title)}</strong><br>${data.demo ? '⚠ 架空データ。乗車案内には使えません。<br>' : ''}
     ${data.stations.length}駅 / ${data.lines.length}路線 / ${data.trips.length}便<br>
     出典: ${escapeHtml(data.source)}<br>利用条件: ${escapeHtml(data.license)}<br>
     最終取込: ${jstDate(data.importedAt)} ${clock(data.importedAt)} JST<br>有効終了: ${escapeHtml(data.validUntil ?? 'フィード内の運行日による')}<br>版: ${escapeHtml(data.version ?? '記載なし')}`
     : '時刻表はまだ登録されていません。公式に利用可能なGTFS ZIPを端末から取り込むか、時刻表を手入力してください。';
-  root.querySelector('#feed-list')!.innerHTML = savedFeeds(cache).map(f => `<div class="feed-row"><strong>${escapeHtml(f.data.title)}</strong><small>版 ${escapeHtml(f.data.version ?? '記載なし')} · 有効終了 ${escapeHtml(f.data.validUntil ?? '記載なし')} · ${f.url ? new URL(f.url).searchParams.has('date') ? '日付固定版・最新版はカタログ確認' : 'オンライン更新可' : 'ファイルから更新'}${dataExpired(f.data, Date.now()) ? ' · 有効期限切れ' : ''}</small><small>最終確認 ${f.checkedAt ? `${jstDate(f.checkedAt)} ${clock(f.checkedAt)}` : 'オンライン未確認（同梱データ）'}</small><button type="button" data-remove-feed="${escapeHtml(f.feedId)}" class="danger">この地域のデータを削除</button></div>`).join('');
+  root.querySelector('#feed-list')!.innerHTML = savedFeeds(cache).map(f => `<div class="feed-row"><strong>${escapeHtml(f.data.title)}</strong><small>版 ${escapeHtml(f.data.version ?? '記載なし')} · 有効終了 ${escapeHtml(f.data.validUntil ?? '記載なし')} · ${f.odpt ? '公式JSONオンライン更新可' : f.url ? new URL(f.url).searchParams.has('date') ? '日付固定版・最新版はカタログ確認' : 'オンライン更新可' : 'ファイルから更新'}${dataExpired(f.data, Date.now()) ? ' · 有効期限切れ' : ''}</small><small>最終確認 ${f.checkedAt ? `${jstDate(f.checkedAt)} ${clock(f.checkedAt)}` : 'オンライン未確認（同梱データ）'}</small><button type="button" data-remove-feed="${escapeHtml(f.feedId)}" class="danger">この地域のデータを削除</button></div>`).join('');
   const targets = root.querySelector<HTMLSelectElement>('[name="feedTarget"]')!;
   const previousTarget = targets.value;
   targets.innerHTML = '<option value="">新しい配布元として追加</option>' + savedFeeds(cache).map(f => `<option value="${escapeHtml(f.feedId)}">${escapeHtml(f.data.title)}</option>`).join('');
   targets.value = previousTarget;
+  const jsonTargets = root.querySelector<HTMLSelectElement>('[name="jsonTarget"]')!;
+  const jsonTarget = jsonTargets.value;
+  jsonTargets.innerHTML = '<option value="">新しい配布元として追加</option>' + savedFeeds(cache).filter(f => f.feedId.startsWith('json-')).map(f => `<option value="${escapeHtml(f.feedId)}">${escapeHtml(f.data.title)}</option>`).join('');
+  jsonTargets.value = jsonTarget;
   root.querySelector<HTMLInputElement>('#auto-update')!.checked = autoUpdate;
   root.querySelector('#connection')!.textContent = nativeLabel;
-  root.querySelector('#debug')!.textContent = `Transit HUD 0.2.1\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
+  root.querySelector('#debug')!.textContent = `Transit HUD 0.3.0\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
 }
 function refreshControls(preserveEditor = false): void {
   const previous = preserveEditor ? root.querySelector<HTMLFormElement>('#favorite-form') : null;
@@ -165,7 +174,31 @@ async function run(action: () => Promise<void> | void): Promise<void> {
   catch (error) { message(errorMessage(error), true); }
   finally { busy = false; root.removeAttribute('aria-busy'); }
 }
+function updateAuthState(): void {
+  root.querySelector('#auth-state')!.textContent = `通常ODPT：${authKeys.odpt ? '設定済み' : '未設定'} / チャレンジ2026：${authKeys.challenge ? '設定済み' : '未設定'}`;
+}
+async function pruneLicensedFeeds(): Promise<void> {
+  const next = removeExpiredLicensedFeeds(cache);
+  if (next === cache) return;
+  await cachePort.set(DATA_KEY, next ? JSON.stringify(next) : ''); cache = next;
+  invalidate(); refreshControls(true); draw(); message('許諾期限が終了したデータを削除しました。保存ルートの駅を確認してください。', true);
+}
+async function downloadJson(operator: string, railway: string, meta: OdptMetadata): Promise<void> {
+  if (!railway) throw new Error('路線一覧から路線を選択してください');
+  if (meta.end > CHALLENGE_END || jstDate(Date.now()) > CHALLENGE_END) throw new Error('チャレンジ2026の許諾期限内の有効期間を指定してください');
+  message('選択した路線の公式JSONを取得しています…');
+  const railways = await fetchOdpt('Railway', operator, authKeys.challenge, railway);
+  const stations = await fetchOdpt('Station', operator, authKeys.challenge, railway);
+  const trains = await fetchOdpt('TrainTimetable', operator, authKeys.challenge, railway);
+  const data = await importOdpt(JSON.stringify(railways), JSON.stringify(stations), JSON.stringify(trains), meta);
+  await installFeed({ data, checkedAt: Date.now(), feedId: `json-${railway}`, odpt: { operator, railway, meta } });
+}
 async function installFeed(next: SavedFeed): Promise<void> {
+  const protectedFeed = AUTH_FEEDS.find(f => f.id === next.feedId);
+  if (protectedFeed) {
+    if (protectedFeed.licenseUntil && protectedFeed.licenseUntil < jstDate(Date.now())) throw new Error('この配信の許諾期間が終了しています');
+    next = { ...next, data: protectTimetable(next.data, protectedFeed.licenseUntil), url: protectedFeed.url };
+  }
   let merged = putFeed(cache, next);
   const edits = retainEdits(merged.data, cache?.edits ?? []);
   const dropped = (cache?.edits?.length ?? 0) - edits.length;
@@ -177,27 +210,30 @@ async function installFeed(next: SavedFeed): Promise<void> {
   if (droppedLinks) message('更新で駅が変わったため、一部の手動乗換連絡を解除しました。');
   if (dropped) message(`${dropped}件の時刻補正は便・停車順の変更で解除しました。ルートを確認してください。`);
 }
-async function downloadFeed(feed: typeof TOEI_FEED): Promise<void> {
+async function downloadFeed(feed: typeof ALL_FEEDS[number]): Promise<void> {
   const existing = savedFeeds(cache).find(f => f.feedId === feed.id);
   message(`${feed.title}を公式配信元から取得しています…`);
-  const result = await refreshGtfs(feed.url, PUBLIC_FEED_ORIGINS, feed, existing);
+  const result = isAuthFeed(feed) ? await refreshAuthGtfs(feed, authKeys[feed.auth], existing) : await refreshGtfs(feed.url, PUBLIC_FEED_ORIGINS, feed, existing);
   if (result.fallback) { message('通信に失敗しました。保存済み時刻表を使用します。', true); return; }
   await installFeed({ ...result.cache, feedId: feed.id, url: feed.url });
   message('公式時刻表を保存しました。お気に入りは編集できます。');
 }
 async function refreshRemote(): Promise<void> {
   let feeds = savedFeeds(cache);
-  if (!feeds.some(f => f.url)) throw new Error('公式データ一覧から配布元を追加するか、公開URLを登録してください');
+  if (!feeds.some(f => f.url || f.odpt)) throw new Error('公式データ一覧から配布元を追加するか、公開URLを登録してください');
   message('保存済み時刻表の更新を確認しています…');
   const failures: string[] = [];
-  for (const feed of feeds.filter(f => f.url)) {
-    const meta = FEED_CATALOG.find(f => f.url === feed.url) ?? feed.data;
-    const result = await refreshGtfs(feed.url!, PUBLIC_FEED_ORIGINS, meta, feed);
+  for (const feed of feeds.filter(f => f.url || f.odpt)) {
+    try {
+    if (feed.odpt) { await downloadJson(feed.odpt.operator, feed.odpt.railway, feed.odpt.meta); continue; }
+    const meta = ALL_FEEDS.find(f => f.url === feed.url);
+    const result = meta && isAuthFeed(meta) ? await refreshAuthGtfs(meta, authKeys[meta.auth], feed) : await refreshGtfs(feed.url!, PUBLIC_FEED_ORIGINS, meta ?? feed.data, feed);
     if (result.fallback) { failures.push(feed.data.title); continue; }
     // Commit each downloaded provider atomically, retaining the others offline.
     await installFeed({ ...result.cache, feedId: feed.feedId, url: feed.url });
+    } catch { failures.push(feed.data.title); }
   }
-  message(failures.length ? `通信障害：${failures.join('・')}は保存済み時刻表を使用します。` : '時刻表の更新確認が完了しました。ルートはいつでも編集できます。', !!failures.length);
+  message(failures.length ? `更新不可（通信・認証）：${failures.join('・')}は保存済み時刻表を使用します。` : '時刻表の更新確認が完了しました。ルートはいつでも編集できます。', !!failures.length);
 }
 async function refreshRealtime(): Promise<void> {
   if (!settings.useRealtime || !remote.realtimeUrl || !cache) return;
@@ -214,11 +250,12 @@ function startTimer(): void {
   if (interval) clearInterval(interval);
   interval = setInterval(() => {
     const now = Date.now();
+    if (!busy && removeExpiredLicensedFeeds(cache, now) !== cache) { void run(pruneLicensedFeeds); return; }
     if (freshRealtime(updates, now).length !== updates.length) { updates = freshRealtime(updates, now); realtimeNote = 'Realtime期限切れ · 予定時刻'; invalidate(); }
     const id = autoFavorite(settings, now, manualDate);
     if (!busy && !riding && id !== settings.activeId) void run(() => selectRoute(id, false));
     draw(now);
-    if (!busy && autoUpdate && savedFeeds(cache).some(f => f.url) && !root.querySelector('#favorite-form:focus-within, #timetable-form:focus-within') && now - lastRemoteCheck > 86_400_000) {
+    if (!busy && autoUpdate && savedFeeds(cache).some(f => f.url || f.odpt) && !root.querySelector('#favorite-form:focus-within, #timetable-form:focus-within') && now - lastRemoteCheck > 86_400_000) {
       lastRemoteCheck = now; void run(refreshRemote);
     } else if (!busy && settings.useRealtime && remote.realtimeUrl && now - lastRealtimeCheck > 60_000) {
       lastRealtimeCheck = now; void run(refreshRealtime);
@@ -274,6 +311,17 @@ root.addEventListener('click', event => {
         const next = mergeFeeds(savedFeeds(cache), cache.links); await cachePort.set(DATA_KEY, JSON.stringify(next)); cache = next; refreshControls(); invalidate(); draw(); message('時刻補正を解除しました。'); break;
       }
       case 'new-favorite': favoriteEditor(root, dataset()); break;
+      case 'clear-auth': { authKeys.odpt = ''; authKeys.challenge = ''; root.querySelector<HTMLFormElement>('#auth-form')!.reset(); updateAuthState(); message('認証トークンを解除しました。'); break; }
+      case 'json-railways': {
+        const form = root.querySelector<HTMLFormElement>('#odpt-online-form')!;
+        const operator = (form.elements.namedItem('operator') as HTMLSelectElement).value;
+        message('公式の路線一覧を取得しています…');
+        const records = await fetchOdpt('Railway', operator, authKeys.challenge);
+        if ((form.elements.namedItem('operator') as HTMLSelectElement).value !== operator) { message('事業者が変更されました。路線一覧を再取得してください。'); break; }
+        const select = form.elements.namedItem('railway') as HTMLSelectElement;
+        select.innerHTML = '<option value="">路線を選択してください</option>' + records.filter(r => typeof r['owl:sameAs'] === 'string' && String(r['owl:sameAs']).startsWith(`odpt.Railway:${operator}.`)).map(r => { const title = r['odpt:railwayTitle'] as { ja?: string } | undefined; return `<option value="${escapeHtml(String(r['owl:sameAs']))}">${escapeHtml(String(title?.ja ?? r['dc:title'] ?? r['owl:sameAs']))}</option>`; }).join('');
+        message('路線を選び、有効期間・祝日を確認して取り込んでください。'); break;
+      }
       case 'refresh': await refreshRemote(); await refreshRealtime(); break;
     }
   });
@@ -285,8 +333,27 @@ root.addEventListener('submit', event => {
   const numbers = (key: string) => fields.getAll(key).map(Number);
   void run(async () => {
     switch (form.getAttribute('id')) {
+      case 'auth-form': {
+        authKeys.odpt = text('odptKey'); authKeys.challenge = text('challengeKey'); form.reset();
+        updateAuthState(); message('トークンを今回の利用中だけ設定しました。保存済み時刻表は更新ボタンから更新できます。'); break;
+      }
+      case 'odpt-online-form': {
+        if (!fields.has('confirmed')) throw new Error('有効期間・祝日を確認してください');
+        const operator = ODPT_OPERATORS.find(o => o.id === text('operator')); if (!operator) throw new Error('事業者を選択してください');
+        await downloadJson(operator.id, text('railway'), { title: `${operator.title} 列車時刻表JSON`, source: `${operator.title}・公共交通オープンデータ協議会`, license: 'チャレンジ2026限定ライセンス', start: text('start'), end: text('end'), holidays: text('holidays').split(/\s+/).filter(Boolean), licenseUntil: CHALLENGE_END });
+        message('公式JSONを保存しました。駅名でルートを登録できます。'); break;
+      }
+      case 'odpt-file-form': {
+        if (!fields.has('terms') || !fields.has('confirmed')) throw new Error('有効期間・祝日・利用条件を確認してください');
+        const read = async (name: string) => { const file = fields.get(name); if (!(file instanceof File) || !file.size || file.size > JSON_LIMIT) throw new Error('各JSONファイルは空でない12MB以下のファイルにしてください'); return file.text(); };
+        const [railways, stations, trains] = await Promise.all([read('railways'), read('stations'), read('trains')]);
+        const data = await importOdpt(railways, stations, trains, { title: text('title'), source: text('source'), license: text('license'), start: text('start'), end: text('end'), holidays: text('holidays').split(/\s+/).filter(Boolean), licenseUntil: text('licenseKind') === 'challenge' ? CHALLENGE_END : undefined });
+        const target = text('jsonTarget'); if (target && !savedFeeds(cache).some(f => f.feedId === target && target.startsWith('json-'))) throw new Error('更新先を確認してください');
+        await installFeed({ data, feedId: target || `json-${crypto.randomUUID()}`, checkedAt: Date.now() });
+        message('列車時刻表JSONを保存しました。駅名でルートを登録できます。'); break;
+      }
       case 'catalog-form': {
-        const feed = FEED_CATALOG.find(f => f.id === text('feed')); if (!feed) throw new Error('配布元を選択してください');
+        const feed = ALL_FEEDS.find(f => f.id === text('feed')); if (!feed) throw new Error('配布元を選択してください');
         await downloadFeed(feed); break;
       }
       case 'transfer-form': {
@@ -400,9 +467,10 @@ async function initialize(): Promise<void> {
     if (raw) {
       const saved = JSON.parse(raw) as RemoteCache;
       if (saved.data?.schema !== 1 || saved.data.timezone !== 'Asia/Tokyo' || !Array.isArray(saved.data.trips)) throw new Error('保存済み時刻表の形式が不正です');
-      cache = saved;
+      cache = removeExpiredLicensedFeeds(saved);
+      if (cache !== saved) await cachePort.set(DATA_KEY, cache ? JSON.stringify(cache) : '');
       // Keep favorites after a timetable revision; invalid references are shown for editing.
-      cache = { ...saved, data: saved.edits?.length ? applyEdits(saved.data, saved.edits) : saved.data };
+      if (cache) { const edits = retainEdits(cache.data, cache.edits ?? []); cache = { ...cache, edits, data: applyEdits(cache.data, edits) }; }
     }
     const remoteRaw = await preferences.get('transit-hud.remote');
     if (remoteRaw) {
@@ -424,7 +492,7 @@ async function initialize(): Promise<void> {
     } catch (error) { message(errorMessage(error), true); }
   }
   refreshControls(); draw(); startTimer(); initializing = false;
-  if (autoUpdate && savedFeeds(cache).some(f => f.url)) { lastRemoteCheck = Date.now(); void run(refreshRemote); }
+  if (autoUpdate && savedFeeds(cache).some(f => f.url || f.odpt)) { lastRemoteCheck = Date.now(); void run(refreshRemote); }
   if (bridge) {
     bridge.onEvenHubEvent(event => {
       const action = inputAction(event); if (!action) return;
@@ -453,3 +521,5 @@ async function initialize(): Promise<void> {
   }
 }
 void initialize().catch(error => { initializing = false; nativeLabel = '初期化エラー'; metadata(); message(errorMessage(error), true); });
+
+root.querySelector<HTMLSelectElement>('#odpt-online-form [name="operator"]')!.addEventListener('change', () => { root.querySelector<HTMLSelectElement>('#odpt-online-form [name="railway"]')!.innerHTML = '<option value="">先に路線一覧を取得してください</option>'; });

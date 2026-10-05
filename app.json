@@ -2,17 +2,19 @@
   "package_id": "io.github.hongsan13.transithud",
   "edition": "202601",
   "name": "Transit HUD",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "min_app_version": "2.2.10",
   "min_sdk_version": "0.0.16",
   "entrypoint": "index.html",
   "permissions": [
     {
       "name": "network",
-      "desc": "選択した公式GTFSの取得と更新",
+      "desc": "選択した公式GTFS・列車時刻表JSONの取得と更新",
       "whitelist": [
         "https://api-public.odpt.org",
-        "https://dataodpt.blob.core.windows.net"
+        "https://dataodpt.blob.core.windows.net",
+        "https://api.odpt.org",
+        "https://api-challenge.odpt.org"
       ]
     }
   ],

@@ -102,3 +102,15 @@ Evenアプリ接続時は公式SDKの保存領域を時刻表の主保存先に�
 成果物: `releases/transit-hud-0.2.1.ehpk`、**840481 bytes**。
 SHA-256: `fe1d10e247a2398c7ab2d37da5dc9ca32a862e29c548a32d23698135515f753f`。
 実機のG2表示・ネットワーク・保存は引き続き未検証。
+
+## v0.3.0：ODPT JSON・認証配信（2026-10-05）
+
+- Vitest: **89 passed / 8 files**。JSONの発着欠損・日付跨ぎ・祝日例外・参照整合性・直通未対応、認証送信先/転送先・鍵と署名URLの非保存、エラーの鍵秘匿、補正禁止、許諾期限後の要求拒否と配布元削除。
+- Production browser: **13 passed**（全体再実行）。JSONのWorker取込、駅名検索・登録、保存復元とオフライン操作、模擬JSON応答での事業者/路線選択・認証取得・更新、鍵入力の消去・再起動後の非保持、認証なし更新で保存済みデータを保持。都営実ZIPの次発・最大2回乗換、SDK mock保存・描画、既存編集も回帰。
+- ブラウザ実行: `CHROMIUM_PATH=/usr/bin/chromium PLAYWRIGHT_BASE_URL=http://127.0.0.1:4193 TOEI_GTFS_ZIP=/workspace/attachments/25fdc76a-1936-4df1-af11-a7098e8f5e95/Toei-Train-GTFS.zip npm run test:browser`。production distをVite previewで内部検証。localhostは配布用URLではない。
+- TypeScript、Vite、公式CLI pack、差分チェック成功。SDK互換表取得警告あり、min_app_version 2.2.10を保持。
+- 認証データは公式スキーマに沿った**架空fixture/模擬応答**。ユーザー未登録・認証鍵なしで、実配信・実CORS・実Azure転送先・対象全便・G2実機は未検証。公表カタログの確認と実データ取得成功を区別する。JSON中の直通分割レコードは取込を止める。
+- 関西・中京・九州・新幹線の公式Web/PDF調査は環境の通信制限で未確認。設定ドラフトの保存はランタイム適用・環境公開を意味しない。
+
+成果物: `releases/transit-hud-0.3.0.ehpk`、**847542 bytes**。
+SHA-256: `c1eaf776759c8a0455da9988cb66e3fe046e1c0eabf4681363d60f870f3c94c6`。

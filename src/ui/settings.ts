@@ -2,11 +2,13 @@ import type { Settings, Timetable, FavoriteRoute } from '../transit/types';
 import type { HudModel } from '../even/renderer';
 import { jstDate } from '../utils/time';
 import { bindStationSearch, stationLabels } from './stations';
-import { FEED_CATALOG, PUBLIC_FEED_ORIGINS } from '../config';
+import { ALL_FEEDS, PUBLIC_FEED_ORIGINS } from '../config';
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
+import { ODPT_OPERATORS, CHALLENGE_END } from '../transit/odpt/loader';
 const e = escapeHtml;
+const jsonPeriodFields = () => `<div class="two"><label>確認した有効開始 YYYYMMDD<input name="start" pattern="[0-9]{8}" value="${jstDate(Date.now())}" required></label><label>確認した有効終了 YYYYMMDD<input name="end" pattern="[0-9]{8}" required></label></div><label>期間内の祝日 YYYYMMDD（空白区切り）<textarea name="holidays" placeholder="祝日は自動補完しません"></textarea></label><label class="check"><input name="confirmed" type="checkbox" required>公式ダイヤの有効期間・祝日を確認しました</label>`;
 const days = ['日', '月', '火', '水', '木', '金', '土'];
 function options(items: { id: string; name: string }[], selected: string): string {
   return items.map(item => `<option value="${e(item.id)}" ${item.id === selected ? 'selected' : ''}>${e(item.name)}</option>`).join('');
@@ -28,9 +30,22 @@ export function mountSettings(root: HTMLElement): void {
     <section class="card"><div class="section-heading"><h2>お気に入り移動</h2><span class="step">01</span></div><div id="favorite-list"></div><div id="favorite-editor"></div></section>
     <section class="card"><div class="section-heading"><h2>時刻表データ</h2><span class="step">01</span></div><div id="dataset" class="dataset"></div>
       <div id="feed-list"></div>
-      <form id="catalog-form"><label>追加する地域・事業者<select name="feed">${FEED_CATALOG.map(f => `<option value="${e(f.id)}">${e(f.region)} · ${e(f.title)}</option>`).join('')}</select></label>
+      <form id="catalog-form"><label>追加する地域・事業者<select name="feed">${ALL_FEEDS.map(f => `<option value="${e(f.id)}">${e(f.region)} · ${e(f.title)}</option>`).join('')}</select></label>
         <label class="check"><input name="terms" type="checkbox" required>配布元の利用条件を確認して追加・更新する</label><button type="submit">公式データを追加・更新</button></form>
-      <p class="hint">使う地域を最大8件保存します。現在の一覧は都営全線と高知の路面電車です。JR・東京メトロなど認証必須の時刻表は未収録です。日付固定のURLは最新版をカタログで確認してください。${FEED_CATALOG.map(f => `<a href="${e(f.catalog)}" target="_blank" rel="noopener noreferrer">${e(f.title)}の利用条件</a>`).join(' / ')} · <a href="https://ckan.odpt.org/dataset/" target="_blank" rel="noopener noreferrer">公式データカタログ</a></p>
+      <p class="hint">使う地域を最大8件保存します。都営・高知は公開配信、JR東日本の関東一部・関東の一部私鉄は登録後に認証取得できます。認証配信は接続未検証です。全国・新幹線は未収録です。日付固定のURLは最新版をカタログで確認してください。${ALL_FEEDS.map(f => `<a href="${e(f.catalog)}" target="_blank" rel="noopener noreferrer">${e(f.title)}の利用条件</a>`).join(' / ')} · <a href="https://ckan.odpt.org/dataset/" target="_blank" rel="noopener noreferrer">公式データカタログ</a></p>
+      <details id="odpt-auth"><summary>ODPT認証設定・登録方法</summary>
+        <p class="hint"><a href="https://developer.odpt.org/signup" target="_blank" rel="noopener noreferrer">ODPT利用登録</a> → 承認後ログイン →「ODPTセンター用アクセストークン」。JR・京王・東武・相鉄には別途<a href="https://developer.odpt.org/challengeinfo" target="_blank" rel="noopener noreferrer">チャレンジ2026参加</a>と専用トークンが必要です。限定データの許諾期限は2027-03-12。早期終了時は該当データを削除してください。</p>
+        <form id="auth-form"><label>通常ODPTトークン<input name="odptKey" type="password" autocomplete="off" maxlength="300"></label><label>チャレンジ2026専用トークン<input name="challengeKey" type="password" autocomplete="off" maxlength="300"></label><button type="submit">今回の利用中だけトークンを設定</button><button type="button" data-action="clear-auth" class="secondary">トークンを解除</button></form>
+        <p id="auth-state" class="hint">認証トークン未設定</p><p class="hint">トークンは保存・再表示しません。終了後は再入力が必要ですが、取り込んだ時刻表は端末に保存します。認証取得した公式便の時刻は補正できません。</p>
+      </details>
+      <details id="odpt-online"><summary>GTFS以外：公式の列車時刻表JSONをオンライン取得</summary>
+        <p class="hint">チャレンジ2026専用トークンが必要です。まず路線一覧を取得し、使う路線を選びます。1000件以上のAPI応答、未対応の直通分割レコードは保存しません。認証配信の実データ・実機通信は未検証です。</p>
+        <form id="odpt-online-form"><label>事業者<select name="operator">${ODPT_OPERATORS.map(o => `<option value="${e(o.id)}">${e(o.title)}</option>`).join('')}</select></label><button type="button" data-action="json-railways" class="secondary">この事業者の路線一覧を取得</button><label>読み込む路線<select name="railway" required><option value="">先に路線一覧を取得してください</option></select></label>${jsonPeriodFields()}<button type="submit">選択した路線の公式JSONを取り込む</button></form>
+      </details>
+      <details><summary>GTFS以外：公式の列車時刻表JSONファイルを追加</summary>
+        <p class="hint">ODPTのRailway・Station・TrainTimetableの3つのJSON配列を使います。StationTimetable（駅別発車表）は乗換計算に使えません。各12MB以下。便IDが変わらない更新は同じ保存先を選べます。</p>
+        <form id="odpt-file-form"><label>名称<input name="title" required maxlength="120"></label><label>出典<input name="source" required maxlength="200"></label><label>利用条件<input name="license" required maxlength="200"></label><label>許諾区分<select name="licenseKind"><option value="challenge">チャレンジ2026限定（${CHALLENGE_END}まで）</option><option value="other">その他・基本ライセンス（有効期間を確認済み）</option></select></label><label>保存先<select name="jsonTarget"><option value="">新しい配布元として追加</option></select></label><label>路線 Railway JSON<input name="railways" type="file" accept=".json,application/json" required></label><label>駅 Station JSON<input name="stations" type="file" accept=".json,application/json" required></label><label>列車 TrainTimetable JSON<input name="trains" type="file" accept=".json,application/json" required></label>${jsonPeriodFields()}<label class="check"><input name="terms" type="checkbox" required>取込・端末保存の利用条件を確認しました</label><button type="submit">列車時刻表JSONを端末から取り込む</button></form>
+      </details>
       <details><summary>GTFS ZIPを端末から追加する</summary>
       <form id="import-form"><label>保存方法<select name="importMode"><option value="add">保存済みデータに追加</option><option value="replace">すべて置き換える（ルートも削除）</option></select></label><label>同じ配布元の更新<select name="feedTarget"><option value="">新しい配布元として追加</option></select></label><label>名称<input name="title" placeholder="都営大江戸線 / 正式な配布データの名称" maxlength="120" required></label>
         <label>配布元・出典<input name="source" placeholder="公式配布元のURLまたは出典" maxlength="200" required></label>
@@ -72,7 +87,7 @@ export function mountSettings(root: HTMLElement): void {
       <p class="hint">設定と時刻表は端末に保存します。位置情報・連絡先・マイクは使用しません。乗車モードは手動で開始し、予定時刻で次の行動を切り替えます。列車への乗車・実際の到着を検知する機能ではありません。</p>
       <details><summary>デバッグ情報・バージョン</summary><pre id="debug"></pre></details>
     </section>
-  </main><footer>Transit HUD 0.2.1 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
+  </main><footer>Transit HUD 0.3.0 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
 }
 export function updateHud(root: HTMLElement, model: HudModel): void {
   root.querySelector('#hud')!.innerHTML = `<p class="hud-title">${e(model.title)}</p><p class="hud-action">${e(model.action)}</p>

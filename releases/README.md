@@ -1,9 +1,11 @@
 # 配布物
 
-現在の版: [transit-hud-0.2.1.ehpk](transit-hud-0.2.1.ehpk)
+現在の版: [transit-hud-0.3.0.ehpk](transit-hud-0.3.0.ehpk)
 
-同じEven Hubプロジェクトにアップロードして更新してください。初期データは都営鉄道全線。ネットワーク権限が追加されています。全国全路線の時刻表ではありません。実機試験は未完了です。
+同じEven Hubプロジェクトへアップロードして更新してください。公式JSON取込・認証付きGTFS取得・最大2回乗換に対応。初期データは都営鉄道全線。認証配信はODPT登録後にトークンを設定して取得します。認証付き実データ・G2実機通信は未検証です。全国全路線・新幹線は未収録です。
 
-SHA-256: `fe1d10e247a2398c7ab2d37da5dc9ca32a862e29c548a32d23698135515f753f`
+サイズ: 847542 bytes
+SHA-256: `c1eaf776759c8a0455da9988cb66e3fe046e1c0eabf4681363d60f870f3c94c6`
 
-公式CLIによる再生成: `npm ci` → `npm run pack`。
+公式CLIで再生成: `npm ci` → `npm run pack`。
+登録・利用手順は[README](../README.md)、検証結果は[VERIFICATION](../docs/VERIFICATION.md)。

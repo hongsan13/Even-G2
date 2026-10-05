@@ -1,7 +1,10 @@
 import type { Timetable, Transfer } from './types';
 import type { RemoteCache } from './gtfs/loader';
 import { TOEI_FEED } from '../config';
-export interface SavedFeed extends RemoteCache { feedId: string; url?: string }
+import { jstDate } from '../utils/time';
+import { applyEdits, retainEdits } from './edits';
+import type { OdptMetadata } from './odpt/parser';
+export interface SavedFeed extends RemoteCache { feedId: string; url?: string; odpt?: { operator: string; railway: string; meta: OdptMetadata } }
 export const MAX_FEEDS = 8;
 export function savedFeeds(cache?: RemoteCache): SavedFeed[] {
   if (!cache) return [];
@@ -43,4 +46,16 @@ export function putFeed(cache: RemoteCache | undefined, next: SavedFeed): Remote
   const merged = mergeFeeds(feeds);
   const ids = new Set(merged.data.stations.map(s => s.id));
   return mergeFeeds(feeds, (cache?.links ?? []).filter(l => ids.has(l.from) && ids.has(l.to)));
+}
+
+export function removeExpiredLicensedFeeds(cache: RemoteCache | undefined, now = Date.now()): RemoteCache | undefined {
+  if (!cache) return cache;
+  const feeds = savedFeeds(cache), kept = feeds.filter(f => !f.data.licenseUntil || f.data.licenseUntil >= jstDate(now));
+  if (kept.length === feeds.length) return cache;
+  if (!kept.length) return undefined;
+  const merged = mergeFeeds(kept);
+  const ids = new Set(merged.data.stations.map(s => s.id));
+  const result = mergeFeeds(kept, (cache.links ?? []).filter(l => ids.has(l.from) && ids.has(l.to)));
+  const edits = retainEdits(result.data, cache.edits ?? []);
+  return { ...result, edits, data: applyEdits(result.data, edits) };
 }
