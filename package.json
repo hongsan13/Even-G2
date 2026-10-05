@@ -1,0 +1,31 @@
+{
+  "name": "transit-hud-even-g2",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "build": "npm run typecheck && vite build && node scripts/copy-notices.mjs",
+    "pack": "npm run build && evenhub pack app.json dist --sdk-ver 0.0.16 -o releases/transit-hud-0.2.0.ehpk",
+    "check": "npm run test && npm run pack"
+  },
+  "dependencies": {
+    "@evenrealities/even_hub_sdk": "0.0.16",
+    "fflate": "0.8.3",
+    "protobufjs": "8.8.0"
+  },
+  "devDependencies": {
+    "@evenrealities/evenhub-cli": "0.1.14",
+    "@playwright/test": "1.63.0",
+    "@types/node": "24.10.1",
+    "typescript": "5.9.3",
+    "vite": "8.3.2",
+    "vitest": "5.0.3"
+  }
+}
