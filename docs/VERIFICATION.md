@@ -83,8 +83,10 @@ Evenアプリ接続時は公式SDKの保存領域を時刻表の主保存先に�
 
 成果物: `releases/transit-hud-0.2.0.ehpk`
 
-- Size: **839699 bytes**
-- SHA-256: `d8bc21119528b7246fd0c69de0ea0e0234dcaf71ab64ab003bea9e518b1e30ff`
+- Size: **839678 bytes**
+- SHA-256: `f9e56732b0be8b174409dc05dd19c32c67d398d0db3e4c8a3ef97e1a3536e389`
 - 都営公式ZIP・クレジット・第三者ライセンス通知を同梱。
 
 全国全路線、JR/東京メトロの認証必須データ、運賃、2回以上の乗換は未対応。実機のG2表示、SDK保存容量、Hub更新間の保持、ネットワーク権限の許諾、iPhone WebViewの駅入力はデバイステストが必要。
+
+最終整形：公式GTFS-Realtime schemaのコメント末尾の空白を除去。機能変更なし。Realtime回帰7件・TypeScript・公式packを再確認し、上記の最終チェックサムへ更新。

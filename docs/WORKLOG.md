@@ -34,4 +34,4 @@
 
 都営と高知の実ZIPの取得・解析と配信側CORSヘッダーを確認。クラウドChromiumの実通信はnet::ERR_CERT_AUTHORITY_INVALIDで失敗。TLS検証は無効にせず、アプリ内更新の状態遷移をテスト用応答で検証。Even Hubのネットワーク権限・iPhone実機からの取得は未検証。
 
-ユニット72件、productionブラウザ10件成功。パッケージのチェックサムはdocs/VERIFICATION.md。この実装・配布物・作業ログをまとめてGitHubのmainへ反映する。
+ユニット72件、productionブラウザ10件成功。パッケージのチェックサムはdocs/VERIFICATION.md。コード・配布物・作業ログをGitHubのmainへ反映。初回実装コミット: 6aa397d。公式protobuf schemaのコメント末尾の空白のみ整理し、Realtimeの7件と型検証・packを再確認して配布物を再生成。機能変更なし。
