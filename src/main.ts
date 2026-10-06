@@ -69,7 +69,7 @@ function metadata(): void {
   jsonTargets.value = jsonTarget;
   root.querySelector<HTMLInputElement>('#auto-update')!.checked = autoUpdate;
   root.querySelector('#connection')!.textContent = nativeLabel;
-  root.querySelector('#debug')!.textContent = `Transit HUD 0.3.0\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
+  root.querySelector('#debug')!.textContent = `Transit HUD 0.3.1\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
 }
 function refreshControls(preserveEditor = false): void {
   const previous = preserveEditor ? root.querySelector<HTMLFormElement>('#favorite-form') : null;
@@ -130,7 +130,7 @@ function draw(now = Date.now()): void {
   const shown = departures.filter(d => d.reachable).sort((a, b) => a.journey.arrival - b.journey.arrival || a.departureTime - b.departureTime).slice(0, 3);
   root.querySelector('#journey-results')!.innerHTML = shown.map(d => `<article class="journey-card"><button type="button" class="secondary" data-journey="${escapeHtml(d.journey.id)}">${clock(d.departureTime)}発 → ${clock(d.journey.arrival)}${d.journey.legs.at(-1)?.arrivalEstimated ? '着目安' : '着'} · 乗換${d.journey.transfers}回</button><p>家を出る目安 ${clock(d.leaveAt)} · 徒歩${favorite?.walkingMinutes ?? 0}分＋余裕${favorite?.bufferMinutes ?? 0}分</p>${d.journey.legs.map((l, i) => `<p>${i ? '乗換 → ' : ''}${escapeHtml(data!.stations.find(s => s.id === l.from)?.name ?? l.from)} ${clock(l.departure)} → ${escapeHtml(data!.stations.find(s => s.id === l.to)?.name ?? l.to)} ${clock(l.arrival)}${l.arrivalEstimated ? '着目安' : '着'}<br><small>${escapeHtml(data!.lines.find(x => x.id === l.routeId)?.name ?? l.routeId)} · ${escapeHtml(l.headsign)}</small></p>`).join('')}</article>`).join('');
   root.querySelector('[data-action="board"]')!.textContent = riding ? '乗車モードを終了' : 'この便に乗車';
-  root.querySelector('#journey-note')!.textContent = riding ? '手動乗車モード：予定時刻で行動を切り替えています。実際の乗車・降車は検知していません。' : 'Tap：次の候補 · Scroll：前後 · 長押し：公式メニュー · ダブルTap：終了';
+  root.querySelector('#journey-note')!.textContent = riding ? 'タッチで乗車モード終了。手動乗車モード：予定時刻で行動を切り替えています。実際の乗車・降車は検知していません。' : 'スワイプ：候補を前後 · タッチ：選んだ便の乗車モード · 長押し：公式メニュー · ダブルTap：終了';
   if (renderer && glassActive) void renderer.render(model, settings.favorites).catch(error => {
     nativeLabel = 'G2表示エラー'; metadata(); message(errorMessage(error), true);
   });
@@ -152,6 +152,16 @@ function move(delta: number): void {
   if (riding || !departures.length) return;
   const current = candidate(), i = departures.findIndex(d => d === current);
   selectedId = departures[(i + delta + departures.length) % departures.length].journey.id; draw();
+}
+function toggleBoarding(): void {
+  if (riding) riding = undefined;
+  else {
+    draw(); // Recheck reachability at the time of the touch, not the last timer tick.
+    const train = candidate();
+    if (!train?.reachable) throw new Error('乗車可能な便を選択してください');
+    riding = structuredClone(train);
+  }
+  draw();
 }
 async function replaceData(next: Timetable | null, favorites: FavoriteRoute[] = [], nextCache?: RemoteCache): Promise<void> {
   const previous = cache, previousSettings = settings;
@@ -283,15 +293,7 @@ root.addEventListener('click', event => {
     } else switch (button.dataset.action) {
       case 'next': move(1); break;
       case 'previous': move(-1); break;
-      case 'board': {
-        if (riding) riding = undefined;
-        else {
-          const train = candidate();
-          if (!train?.reachable) throw new Error('乗車可能な便を選択してください');
-          riding = structuredClone(train);
-        }
-        draw(); break;
-      }
+      case 'board': toggleBoarding(); break;
       case 'demo': await replaceData(demoTimetable(), demoFavorites()); message('架空サンプルです。実際の電車への乗車案内には使えません。'); break;
       case 'clear': await preferences.set('transit-hud.initial-data', 'disabled'); await replaceData(null); remote = { gtfsUrl: '', realtimeUrl: '' }; await preferences.set('transit-hud.remote', JSON.stringify(remote)); message('時刻表とお気に入りを削除しました。'); break;
       case 'swap-stations': {
@@ -506,6 +508,7 @@ async function initialize(): Promise<void> {
       void run(async () => {
         if (action.kind === 'next') move(1);
         else if (action.kind === 'previous') move(-1);
+        else if (action.kind === 'board') toggleBoarding();
         else if (action.kind === 'menu') {
           if (action.id === MENU_NEXT) move(1);
           else if (action.id === MENU_PREVIOUS) move(-1);

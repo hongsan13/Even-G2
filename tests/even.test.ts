@@ -8,12 +8,14 @@ import { selectNextDepartures } from '../src/transit/departureSelector';
 import { data, favorite, time, trip } from './fixtures';
 describe('公式SDK入力とメニュー', () => {
   it('protobufで省略されたCLICK=0をenvelope内でだけ補う', () => {
-    expect(inputAction({ sysEvent: { eventSource: 1 } } as Parameters<typeof inputAction>[0])).toEqual({ kind: 'next' });
+    expect(inputAction({ sysEvent: { eventSource: 1 } } as Parameters<typeof inputAction>[0])).toEqual({ kind: 'board' });
     expect(inputAction({})).toBeNull();
     expect(inputAction({ audioEvent: {} } as Parameters<typeof inputAction>[0])).toBeNull();
   });
   it('scroll、double click、長押し、foregroundを区別', () => {
     expect(inputAction({ textEvent: { eventType: OsEventTypeList.SCROLL_TOP_EVENT } } as Parameters<typeof inputAction>[0])).toEqual({ kind: 'previous' });
+    expect(inputAction({ sysEvent: { eventType: OsEventTypeList.SCROLL_BOTTOM_EVENT } } as Parameters<typeof inputAction>[0])).toEqual({ kind: 'next' });
+    expect(inputAction({ textEvent: { eventType: OsEventTypeList.CLICK_EVENT } } as Parameters<typeof inputAction>[0])).toEqual({ kind: 'board' });
     expect(inputAction({ sysEvent: { eventType: OsEventTypeList.DOUBLE_CLICK_EVENT } } as Parameters<typeof inputAction>[0])).toEqual({ kind: 'exit' });
     expect(inputAction({ sysEvent: { eventType: OsEventTypeList.LONG_PRESS_EVENT } } as Parameters<typeof inputAction>[0])).toBeNull();
     expect(inputAction({ sysEvent: { eventType: OsEventTypeList.FOREGROUND_ENTER_EVENT } } as Parameters<typeof inputAction>[0])).toEqual({ kind: 'foreground' });

@@ -1,5 +1,5 @@
 import { OsEventTypeList, type EvenHubEvent } from '@evenrealities/even_hub_sdk';
-export type InputAction = { kind: 'next' | 'previous' | 'exit' | 'foreground' | 'background' } | { kind: 'menu'; id: number };
+export type InputAction = { kind: 'next' | 'previous' | 'board' | 'exit' | 'foreground' | 'background' } | { kind: 'menu'; id: number };
 function eventType(envelope?: { eventType?: OsEventTypeList }): OsEventTypeList | null {
   return envelope ? envelope.eventType ?? OsEventTypeList.CLICK_EVENT : null;
 }
@@ -10,8 +10,8 @@ export function inputAction(event: EvenHubEvent): InputAction | null {
     || sys === OsEventTypeList.SYSTEM_EXIT_EVENT || sys === OsEventTypeList.ABNORMAL_EXIT_EVENT) return { kind: 'exit' };
   if (sys === OsEventTypeList.FOREGROUND_EXIT_EVENT) return { kind: 'background' };
   if (sys === OsEventTypeList.FOREGROUND_ENTER_EVENT) return { kind: 'foreground' };
-  if (text === OsEventTypeList.SCROLL_TOP_EVENT) return { kind: 'previous' };
-  if (text === OsEventTypeList.SCROLL_BOTTOM_EVENT) return { kind: 'next' };
-  if (sys === OsEventTypeList.CLICK_EVENT || text === OsEventTypeList.CLICK_EVENT) return { kind: 'next' };
+  if (sys === OsEventTypeList.SCROLL_TOP_EVENT || text === OsEventTypeList.SCROLL_TOP_EVENT) return { kind: 'previous' };
+  if (sys === OsEventTypeList.SCROLL_BOTTOM_EVENT || text === OsEventTypeList.SCROLL_BOTTOM_EVENT) return { kind: 'next' };
+  if (sys === OsEventTypeList.CLICK_EVENT || text === OsEventTypeList.CLICK_EVENT) return { kind: 'board' };
   return null;
 }
