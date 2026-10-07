@@ -128,3 +128,9 @@ Vitest 89件/8 files成功。新規Productionブラウザ1件でSDKの実際の�
 - TypeScript/Vite/公式pack・差分チェック成功。互換表取得の警告あり、min_app_version 2.2.10は保持。G2実機ジェスチャーは未検証。
 
 成果物: releases/transit-hud-0.3.2.ehpk、848172 bytes。SHA-256: `3da0a586f0175e29e297017c1993953c0c9e42b4e7ac3b2683ea3b8a241be134`。
+
+## v0.3.3（2026-10-07）
+
+Vitest 92件成功。関連ブラウザ8件中既存7件成功、新規1件で画面位置の問題を検出。修正後の新規1件再実行成功。編集フォームの同一DOM・下書き・フォーカス・切替ボタンの表示位置・選択保存/再起動を確認。全ブラウザ15件の再実行は今回未実施。TypeScript/Vite/公式pack・差分チェック成功。iPhone/G2実機は未検証。
+
+releases/transit-hud-0.3.3.ehpk、848405 bytes。SHA-256: `0c56485d14a69d3678e833036df032687e694416680125e5bcd99ce6a04bf552`。

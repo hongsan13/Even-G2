@@ -34,6 +34,8 @@ let selectedId: string | null = null, riding: Departure | undefined;
 let updates: RealtimeUpdate[] = [], realtimeNote = 'Realtime未取得 · 予定時刻';
 let manualDate: string | null = null, busy = false, glassActive = true;
 let initializing = true;
+let routeViewportAnchor: { element: HTMLElement; top: number } | undefined;
+for (const type of ['pointerdown', 'touchstart', 'wheel', 'keydown']) window.addEventListener(type, () => { routeViewportAnchor = undefined; }, { passive: true });
 let history: Departure[] = [];
 let departures: Departure[] = [], computed: Journey[] = [], computedKey = '', computedAt = 0;
 let interval: ReturnType<typeof setInterval> | undefined;
@@ -70,7 +72,7 @@ function metadata(): void {
   jsonTargets.value = jsonTarget;
   root.querySelector<HTMLInputElement>('#auto-update')!.checked = autoUpdate;
   root.querySelector('#connection')!.textContent = nativeLabel;
-  root.querySelector('#debug')!.textContent = `Transit HUD 0.3.2\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
+  root.querySelector('#debug')!.textContent = `Transit HUD 0.3.3\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
 }
 function refreshControls(preserveEditor = false): void {
   const previous = preserveEditor ? root.querySelector<HTMLFormElement>('#favorite-form') : null;
@@ -134,6 +136,11 @@ function draw(now = Date.now()): void {
   root.querySelector('#past-journeys')!.innerHTML = history.length ? `<details><summary>すでに乗車中の便を選ぶ（過去60分・到着前）</summary>${[...history].reverse().map(d => `<button type="button" class="secondary" data-journey="${escapeHtml(d.journey.id)}">${clock(d.departureTime)}発 → ${clock(d.journey.arrival)}着 · 乗換${d.journey.transfers}回</button>`).join('')}<p class="hint">乗っている便を選び、タッチまたは乗車ボタンでロックしてください。</p></details>` : '';
   root.querySelector('[data-action="board"]')!.textContent = riding ? '乗車モードを終了' : 'この便に乗車';
   root.querySelector('#journey-note')!.textContent = riding ? 'タッチで乗車モード終了。手動乗車モード：予定時刻で行動を切り替えています。実際の乗車・降車は検知していません。' : 'スワイプ：候補を前後（過去60分まで） · タッチ：選んだ便の乗車モード · 長押し：公式メニュー · ダブルTap：終了';
+  if (routeViewportAnchor) {
+    const { element, top } = routeViewportAnchor;
+    if (element.isConnected) window.scrollBy({ top: element.getBoundingClientRect().top - top, behavior: 'instant' });
+    if (!searching) routeViewportAnchor = undefined;
+  }
   if (renderer && glassActive) void renderer.render(model, settings.favorites).catch(error => {
     nativeLabel = 'G2表示エラー'; metadata(); message(errorMessage(error), true);
   });
@@ -143,10 +150,17 @@ async function saveSettings(next: Settings): Promise<void> {
   settings = next; refreshControls(); invalidate(); draw();
 }
 async function selectRoute(id: string, manual = true): Promise<void> {
+  const focused = document.activeElement;
+  const anchor = focused instanceof HTMLElement && root.contains(focused) ? { element: focused, top: focused.getBoundingClientRect().top } : undefined;
   if (!settings.favorites.some(f => f.id === id)) return;
-  await saveSettings({ ...settings, activeId: id });
+  const next = { ...settings, activeId: id };
+  await preferences.set(SETTINGS_KEY, JSON.stringify(next));
+  settings = next;
   if (manual) { manualDate = jstDate(Date.now()); await preferences.set('transit-hud.manual-date', manualDate); }
-  selectedId = null; riding = undefined; draw();
+  routeViewportAnchor = anchor;
+  // Switching a preset must not rebuild the editor or remove the focused tab.
+  for (const button of root.querySelectorAll<HTMLButtonElement>('[data-route]')) button.classList.toggle('active', button.dataset.route === id);
+  selectedId = null; riding = undefined; invalidate(); draw();
 }
 function candidate(): Departure | undefined {
   return [...history, ...departures].find(d => d.journey.id === selectedId) ?? recommendedDeparture(departures);

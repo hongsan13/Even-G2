@@ -87,7 +87,7 @@ export function mountSettings(root: HTMLElement): void {
       <p class="hint">設定と時刻表は端末に保存します。位置情報・連絡先・マイクは使用しません。乗車モードは手動で開始し、予定時刻で次の行動を切り替えます。列車への乗車・実際の到着を検知する機能ではありません。</p>
       <details><summary>デバッグ情報・バージョン</summary><pre id="debug"></pre></details>
     </section>
-  </main><footer>Transit HUD 0.3.2 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
+  </main><footer>Transit HUD 0.3.3 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
 }
 export function updateHud(root: HTMLElement, model: HudModel): void {
   root.querySelector('#hud')!.innerHTML = `<p class="hud-title">${e(model.title)}</p><p class="hud-action">${e(model.action)}</p>
