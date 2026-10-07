@@ -8,7 +8,7 @@ import { BrowserStorage, NativeStorage, CacheStorage, ChunkStorage, CompressedSt
 import { readSettings, emptySettings, validateFavorite, autoFavorite, SETTINGS_KEY, DATA_KEY } from './state/store';
 import { mountSettings, updateHud, updateFavoriteControls, favoriteEditor, escapeHtml } from './ui/settings';
 import { JourneySearch } from './transit/search';
-import { selectNextDepartures, recommendedDeparture } from './transit/departureSelector';
+import { selectNextDepartures, recommendedDeparture, pastDepartures, BOARDING_LOOKBACK_MINUTES } from './transit/departureSelector';
 import { dataExpired, freshRealtime } from './transit/timetable';
 import { demoTimetable, demoFavorites } from './transit/demo';
 import { manualTimetable, manualFavorites, type ManualInput } from './transit/manual';
@@ -34,6 +34,7 @@ let selectedId: string | null = null, riding: Departure | undefined;
 let updates: RealtimeUpdate[] = [], realtimeNote = 'Realtime未取得 · 予定時刻';
 let manualDate: string | null = null, busy = false, glassActive = true;
 let initializing = true;
+let history: Departure[] = [];
 let departures: Departure[] = [], computed: Journey[] = [], computedKey = '', computedAt = 0;
 let interval: ReturnType<typeof setInterval> | undefined;
 let autoUpdate = true;
@@ -69,7 +70,7 @@ function metadata(): void {
   jsonTargets.value = jsonTarget;
   root.querySelector<HTMLInputElement>('#auto-update')!.checked = autoUpdate;
   root.querySelector('#connection')!.textContent = nativeLabel;
-  root.querySelector('#debug')!.textContent = `Transit HUD 0.3.1\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
+  root.querySelector('#debug')!.textContent = `Transit HUD 0.3.2\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
 }
 function refreshControls(preserveEditor = false): void {
   const previous = preserveEditor ? root.querySelector<HTMLFormElement>('#favorite-form') : null;
@@ -107,7 +108,7 @@ function draw(now = Date.now()): void {
       const generation = ++searchGeneration;
       if (key !== computedKey) computed = [];
       computedKey = key; computedAt = now; searching = true; searchError = '';
-      void search.search(data, favorite, now, settings.useRealtime ? updates : []).then(result => {
+      void search.search(data, favorite, now, settings.useRealtime ? updates : [], BOARDING_LOOKBACK_MINUTES).then(result => {
         if (generation !== searchGeneration) return;
         computed = result; searching = false; draw();
       }).catch(error => {
@@ -116,10 +117,11 @@ function draw(now = Date.now()): void {
       });
     }
     departures = selectNextDepartures(computed, now, favorite.walkingMinutes, favorite.bufferMinutes);
-  } else departures = [];
-  // Once a pinned train departs, return to automatic selection.
-  if (selectedId && !departures.some(d => d.journey.id === selectedId)) selectedId = null;
-  const model = hudModel(data, favorite, departures, selectedId, now, note, riding);
+    history = pastDepartures(computed, now);
+  } else { departures = []; history = []; }
+  // Retain an explicit selection while a recently departed journey is still underway.
+  if (selectedId && ![...history, ...departures].some(d => d.journey.id === selectedId)) selectedId = null;
+  const model = hudModel(data, favorite, selectedId ? [...history, ...departures] : departures, selectedId, now, note, riding);
   if (!validRoute && !riding) { model.action = '更新後のルートを確認'; model.primary = '駅や路線が変更されています。編集してください'; }
   if (favorite && validRoute && !usable && !riding) { model.action = '登録ルートの使用曜日外'; model.primary = '別のルートを選択'; }
   if (expired && !riding) { model.action = '時刻表の有効期限切れ'; model.primary = 'スマホで更新してください'; }
@@ -129,8 +131,9 @@ function draw(now = Date.now()): void {
   updateHud(root, model);
   const shown = departures.filter(d => d.reachable).sort((a, b) => a.journey.arrival - b.journey.arrival || a.departureTime - b.departureTime).slice(0, 3);
   root.querySelector('#journey-results')!.innerHTML = shown.map(d => `<article class="journey-card"><button type="button" class="secondary" data-journey="${escapeHtml(d.journey.id)}">${clock(d.departureTime)}発 → ${clock(d.journey.arrival)}${d.journey.legs.at(-1)?.arrivalEstimated ? '着目安' : '着'} · 乗換${d.journey.transfers}回</button><p>家を出る目安 ${clock(d.leaveAt)} · 徒歩${favorite?.walkingMinutes ?? 0}分＋余裕${favorite?.bufferMinutes ?? 0}分</p>${d.journey.legs.map((l, i) => `<p>${i ? '乗換 → ' : ''}${escapeHtml(data!.stations.find(s => s.id === l.from)?.name ?? l.from)} ${clock(l.departure)} → ${escapeHtml(data!.stations.find(s => s.id === l.to)?.name ?? l.to)} ${clock(l.arrival)}${l.arrivalEstimated ? '着目安' : '着'}<br><small>${escapeHtml(data!.lines.find(x => x.id === l.routeId)?.name ?? l.routeId)} · ${escapeHtml(l.headsign)}</small></p>`).join('')}</article>`).join('');
+  root.querySelector('#past-journeys')!.innerHTML = history.length ? `<details><summary>すでに乗車中の便を選ぶ（過去60分・到着前）</summary>${[...history].reverse().map(d => `<button type="button" class="secondary" data-journey="${escapeHtml(d.journey.id)}">${clock(d.departureTime)}発 → ${clock(d.journey.arrival)}着 · 乗換${d.journey.transfers}回</button>`).join('')}<p class="hint">乗っている便を選び、タッチまたは乗車ボタンでロックしてください。</p></details>` : '';
   root.querySelector('[data-action="board"]')!.textContent = riding ? '乗車モードを終了' : 'この便に乗車';
-  root.querySelector('#journey-note')!.textContent = riding ? 'タッチで乗車モード終了。手動乗車モード：予定時刻で行動を切り替えています。実際の乗車・降車は検知していません。' : 'スワイプ：候補を前後 · タッチ：選んだ便の乗車モード · 長押し：公式メニュー · ダブルTap：終了';
+  root.querySelector('#journey-note')!.textContent = riding ? 'タッチで乗車モード終了。手動乗車モード：予定時刻で行動を切り替えています。実際の乗車・降車は検知していません。' : 'スワイプ：候補を前後（過去60分まで） · タッチ：選んだ便の乗車モード · 長押し：公式メニュー · ダブルTap：終了';
   if (renderer && glassActive) void renderer.render(model, settings.favorites).catch(error => {
     nativeLabel = 'G2表示エラー'; metadata(); message(errorMessage(error), true);
   });
@@ -146,19 +149,24 @@ async function selectRoute(id: string, manual = true): Promise<void> {
   selectedId = null; riding = undefined; draw();
 }
 function candidate(): Departure | undefined {
-  return departures.find(d => d.journey.id === selectedId) ?? recommendedDeparture(departures);
+  return [...history, ...departures].find(d => d.journey.id === selectedId) ?? recommendedDeparture(departures);
 }
 function move(delta: number): void {
-  if (riding || !departures.length) return;
-  const current = candidate(), i = departures.findIndex(d => d === current);
-  selectedId = departures[(i + delta + departures.length) % departures.length].journey.id; draw();
+  const choices = [...history, ...departures];
+  if (riding || !choices.length) return;
+  const current = candidate(), i = choices.findIndex(d => d === current);
+  const index = i < 0 ? (delta < 0 ? choices.length - 1 : 0) : Math.max(0, Math.min(choices.length - 1, i + delta));
+  selectedId = choices[index].journey.id; draw();
 }
 function toggleBoarding(): void {
   if (riding) riding = undefined;
   else {
+    const previousSelection = selectedId;
     draw(); // Recheck reachability at the time of the touch, not the last timer tick.
     const train = candidate();
-    if (!train?.reachable) throw new Error('乗車可能な便を選択してください');
+    if (previousSelection && selectedId !== previousSelection) throw new Error('選択した便は到着済みか、過去60分の範囲外です');
+    const onBoard = train && selectedId === train.journey.id && history.some(d => d.journey.id === selectedId);
+    if (!train || !train.reachable && !onBoard) throw new Error('乗車可能な便、またはすでに乗車中の過去の便を選択してください');
     riding = structuredClone(train);
   }
   draw();

@@ -22,7 +22,7 @@ export function mountSettings(root: HTMLElement): void {
   <main>
     <section class="card live-card" aria-labelledby="live-title"><div class="section-heading"><h2 id="live-title">次の行動</h2><span id="connection" class="pill">接続確認中</span></div>
       <div id="hud" class="hud" aria-live="polite"></div>
-      <div id="journey-results" aria-live="polite"></div>
+      <div id="journey-results" aria-live="polite"></div><div id="past-journeys"></div>
       <div id="routes" class="route-tabs"></div>
       <div class="actions"><button data-action="previous" class="secondary">← 前の候補</button><button data-action="next" class="secondary">次の候補 →</button><button data-action="board">この便に乗車</button></div>
       <p id="journey-note" class="hint"></p><p id="status" role="status" class="notice">時刻表を取り込むか、手入力で登録してください。</p>
@@ -87,7 +87,7 @@ export function mountSettings(root: HTMLElement): void {
       <p class="hint">設定と時刻表は端末に保存します。位置情報・連絡先・マイクは使用しません。乗車モードは手動で開始し、予定時刻で次の行動を切り替えます。列車への乗車・実際の到着を検知する機能ではありません。</p>
       <details><summary>デバッグ情報・バージョン</summary><pre id="debug"></pre></details>
     </section>
-  </main><footer>Transit HUD 0.3.1 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
+  </main><footer>Transit HUD 0.3.2 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
 }
 export function updateHud(root: HTMLElement, model: HudModel): void {
   root.querySelector('#hud')!.innerHTML = `<p class="hud-title">${e(model.title)}</p><p class="hud-action">${e(model.action)}</p>

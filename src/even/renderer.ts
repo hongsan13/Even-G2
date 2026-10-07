@@ -15,7 +15,7 @@ export function hudModel(data: Timetable | null, favorite: FavoriteRoute | undef
   if (journey) {
     const legs = journey.journey.legs;
     const current = legs.find(l => now < l.arrival);
-    if (!current) return { title, action: '到着予定時刻を過ぎました', primary: name(favorite.to), detail: '乗車状況は自動検知しません', alternatives: 'スマホで乗車モードを終了', footer };
+    if (!current) return { title, action: '到着予定時刻を過ぎました', primary: name(favorite.to), detail: '乗車状況は自動検知しません', alternatives: 'タッチで乗車モードを終了', footer };
     const i = legs.indexOf(current);
     const lineName = data.lines.find(l => l.id === current.routeId)?.name ?? current.routeId;
     return { title, action: now < current.departure ? '次の行動 · 乗車' : `次は${name(current.to)}${i + 1 < legs.length ? 'で乗換' : 'で降車'}`,
@@ -28,7 +28,7 @@ export function hudModel(data: Timetable | null, favorite: FavoriteRoute | undef
   const first = selected.journey.legs[0];
   const line = data.lines.find(l => l.id === first.routeId)?.name ?? first.routeId;
   const others = departures.slice(departures.indexOf(selected) + 1, departures.indexOf(selected) + 3);
-  return { title, action: label[selected.status], primary: `${clock(first.departure)}発 · あと${selected.minutesUntilDeparture}分`,
+  return { title, action: first.departure < now ? '乗車済みならタッチでロック' : label[selected.status], primary: first.departure < now ? `${clock(first.departure)}発 · ${Math.floor((now - first.departure) / MINUTE)}分前` : `${clock(first.departure)}発 · あと${selected.minutesUntilDeparture}分`,
     detail: `${line}${first.delaySeconds ? ` (${Math.round(first.delaySeconds / 60)}分補正)` : ''} ${first.platform ? `${first.platform}番線 ` : ''}${first.headsign}`,
     alternatives: others.map(d => `${d.reachable ? '○' : '×'} ${clock(d.departureTime)} あと${d.minutesUntilDeparture}分`).join('  '),
     footer: `${name(favorite.to)} ${clock(selected.journey.arrival)}${selected.journey.legs.at(-1)?.arrivalEstimated ? '着目安' : '着'} · 乗換${selected.journey.transfers}回\n${footer}` };

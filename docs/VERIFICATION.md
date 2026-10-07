@@ -120,3 +120,11 @@ SHA-256: `c1eaf776759c8a0455da9988cb66e3fe046e1c0eabf4681363d60f870f3c94c6`。
 Vitest 89件/8 files成功。新規Productionブラウザ1件でSDKの実際の受信口へ模擬イベントを送信し、スワイプ前後・タッチ乗車・乗車中の候補固定・再タッチ解除・候補なしの拒否を検証。TypeScript/Vite/公式pack成功。既存全ブラウザケースの再実行は今回未実施。G2実機操作は未検証。
 
 成果物: releases/transit-hud-0.3.1.ehpk、847605 bytes。SHA-256: `7deb688016da0b9445fb25bc1c4022577fbfbd7017552af0c49dbc094945c3db`。
+
+## v0.3.2（2026-10-07）
+
+- Vitest **92 passed / 9 files**。60分の境界・到着済み除外・未来便推奨維持・過去便HUD・Realtimeの現在時刻判定/運休・前日の24時以降を検証。
+- Production browser **全14件**。SDK受信口の模擬イベントで発車済み13:42便を選択・タッチロックし14:03到着の案内へ切替。到着後に再読込して履歴から消えることを検証。既存の都営実ZIP・最大2回乗換・JSON・保存・編集も回帰。
+- TypeScript/Vite/公式pack・差分チェック成功。互換表取得の警告あり、min_app_version 2.2.10は保持。G2実機ジェスチャーは未検証。
+
+成果物: releases/transit-hud-0.3.2.ehpk、848172 bytes。SHA-256: `3da0a586f0175e29e297017c1993953c0c9e42b4e7ac3b2683ea3b8a241be134`。

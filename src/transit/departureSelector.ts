@@ -16,3 +16,12 @@ export function selectNextDepartures(journeys: Journey[], currentTime: number, w
 export function recommendedDeparture(departures: Departure[]): Departure | undefined {
   return departures.filter(d => d.reachable).sort((a, b) => a.journey.arrival - b.journey.arrival || a.journey.transfers - b.journey.transfers || a.departureTime - b.departureTime)[0] ?? departures[0];
 }
+
+/** Historical choices are explicit boarding recovery, never future recommendations. */
+export const BOARDING_LOOKBACK_MINUTES = 60;
+export function pastDepartures(journeys: Journey[], now: number): Departure[] {
+  return journeys.filter(j => j.legs[0].departure < now && j.legs[0].departure >= now - BOARDING_LOOKBACK_MINUTES * MINUTE && j.arrival > now)
+    .map(journey => ({ journey, departureTime: journey.legs[0].departure, minutesUntilDeparture: Math.ceil((journey.legs[0].departure - now) / MINUTE),
+      leaveAt: journey.legs[0].departure, reachable: false, status: 'MISSED' as const, canceled: false }))
+    .sort((a, b) => a.departureTime - b.departureTime || a.journey.arrival - b.journey.arrival);
+}

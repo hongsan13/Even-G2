@@ -25,7 +25,9 @@ function lowerBound(legs: TransitLeg[], departure: number): number {
  * Keeps all valid first trains and the fastest allowed arrival for each, without
  * materializing every combination of trips and intermediate stops.
  */
-export function findJourneys(data: Timetable, favorite: FavoriteRoute, now: number, realtime: RealtimeUpdate[] = []): Journey[] {
+export function findJourneys(data: Timetable, favorite: FavoriteRoute, now: number, realtime: RealtimeUpdate[] = [], lookbackMinutes = 0): Journey[] {
+  if (!Number.isFinite(lookbackMinutes) || lookbackMinutes < 0 || lookbackMinutes > 60) throw new Error('過去の検索範囲は0〜60分です');
+  const earliest = now - lookbackMinutes * MINUTE;
   const updates = freshRealtime(realtime, now), boardings: Boarding[] = [];
   const secondLegs = new Map<string, TransitLeg[]>();
   const intermediateBoardings = new Map<string, Boarding[]>();
@@ -72,7 +74,7 @@ export function findJourneys(data: Timetable, favorite: FavoriteRoute, now: numb
       if (!matches(trip.stops[end].stopId, favorite.to)) continue;
       for (let start = 0; start < end; start++) {
         const connection = leg(data, trip, date, start, end, scoped);
-        if (!connection || connection.departure < now || connection.arrival > now + SEARCH_HORIZON) continue;
+        if (!connection || connection.departure < earliest || connection.arrival > now + SEARCH_HORIZON) continue;
         const list = secondLegs.get(connection.from) ?? [];
         list.push(connection); secondLegs.set(connection.from, list);
       }
@@ -112,7 +114,7 @@ export function findJourneys(data: Timetable, favorite: FavoriteRoute, now: numb
           boardingLeg = leg(data, trip, date, start, end, scoped);
           if (boardingLeg) break;
         }
-        if (!boardingLeg || boardingLeg.departure < now || boardingLeg.departure > now + SEARCH_HORIZON) continue;
+        if (!boardingLeg || boardingLeg.departure < earliest || boardingLeg.departure > now + SEARCH_HORIZON) continue;
         const list = intermediateBoardings.get(stop.stopId) ?? [];
         list.push({ trip, date, index: start, departure: boardingLeg.departure }); intermediateBoardings.set(stop.stopId, list);
       }
@@ -164,7 +166,7 @@ export function findJourneys(data: Timetable, favorite: FavoriteRoute, now: numb
     for (let end = boarding.index + 1; end < boarding.trip.stops.length; end++) {
       const first = leg(data, boarding.trip, boarding.date, boarding.index, end, scoped);
       if (!first) continue;
-      if (first.departure < now || first.departure > now + SEARCH_HORIZON) break;
+      if (first.departure < earliest || first.departure > now + SEARCH_HORIZON) break;
       if (matches(first.to, favorite.to)) consider([first]);
       if (!allowTransfer || favorite.transferAt && !matches(first.to, favorite.transferAt)) continue;
       for (const target of targets.get(first.to) ?? []) {

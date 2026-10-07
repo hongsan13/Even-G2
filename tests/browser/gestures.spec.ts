@@ -14,7 +14,7 @@ test('SDKスワイプで候補選択、タッチで乗車・固定・解除、�
   const gesture = (eventType: number, kind = 'textEvent') => page.evaluate(({ eventType, kind }) => {
     (window as unknown as { _listenEvenAppMessage: (event: unknown) => void })._listenEvenAppMessage({ method: 'evenHubEvent', data: { type: kind, jsonData: { eventType } } });
   }, { eventType, kind });
-  await gesture(0); await expect(page.locator('#status')).toContainText('乗車可能な便を選択');
+  await gesture(0); await expect(page.locator('#status')).toContainText('乗車可能な便');
   await expect(page.locator('[data-action="board"]')).toHaveText('この便に乗車');
   await page.getByRole('button', { name: '架空サンプルを試す' }).click();
   await expect(page.locator('.hud-primary')).toContainText('13:54');
@@ -26,4 +26,12 @@ test('SDKスワイプで候補選択、タッチで乗車・固定・解除、�
   await gesture(2); await expect(page.locator('#hud')).toHaveText(pinned!);
   await gesture(0, 'sysEvent'); await expect(page.locator('[data-action="board"]')).toHaveText('この便に乗車');
   await gesture(1); await expect(page.locator('.hud-primary')).toContainText('13:54');
+  await gesture(1); await gesture(1); await expect(page.locator('.hud-primary')).toContainText('13:42');
+  await expect(page.locator('.hud-action')).toContainText('乗車済み');
+  await gesture(0); await expect(page.locator('[data-action="board"]')).toHaveText('乗車モードを終了');
+  await expect(page.locator('.hud-primary')).toContainText('14:03');
+  await gesture(0);
+  await page.clock.setFixedTime(new Date('2026-10-06T14:06:00+09:00'));
+  await page.reload(); await expect(page.locator('#past-journeys')).toContainText('14:00');
+  await expect(page.locator('#past-journeys')).not.toContainText('13:42');
 });

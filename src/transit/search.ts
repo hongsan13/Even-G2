@@ -8,7 +8,7 @@ export class JourneySearch {
     this.worker?.terminate(); this.worker = undefined;
     clearTimeout(this.timer); this.reject?.(new Error('検索を更新しました')); this.reject = undefined;
   }
-  search(data: Timetable, favorite: FavoriteRoute, now: number, updates: RealtimeUpdate[]): Promise<Journey[]> {
+  search(data: Timetable, favorite: FavoriteRoute, now: number, updates: RealtimeUpdate[], lookbackMinutes = 0): Promise<Journey[]> {
     this.cancel();
     return new Promise((resolve, reject) => {
       this.reject = reject;
@@ -19,7 +19,7 @@ export class JourneySearch {
         worker.onmessage = ({ data: result }) => { finish(); result.error ? reject(new Error(result.error)) : resolve(result.journeys); };
         worker.onerror = () => { finish(); reject(new Error('経路検索を開始できません。アプリを開き直してください')); };
         this.timer = setTimeout(() => { finish(); reject(new Error('経路検索が時間切れになりました。路線や方面を絞って再登録してください')); }, 30_000);
-        worker.postMessage({ id: 1, data, favorite, now, updates });
+        worker.postMessage({ id: 1, data, favorite, now, updates, lookbackMinutes });
       } catch (error) { this.cancel(); reject(error); }
     });
   }
