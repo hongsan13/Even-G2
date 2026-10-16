@@ -1,8 +1,9 @@
 import { Catalog } from './catalog';
 import { service } from './app';
+import { serviceOrigins } from './settings';
 const port = Number(process.env.PORT ?? '8080');
-const origins = (process.env.TRANSIT_ALLOWED_ORIGINS ?? '').split(',').map(s => s.trim()).filter(Boolean);
-if (!origins.length) throw new Error('Set TRANSIT_ALLOWED_ORIGINS to exact Even Hub WebView origins');
+const origins = serviceOrigins(process.env.TRANSIT_ALLOWED_ORIGINS, process.env.RENDER_EXTERNAL_URL);
+if (!origins.length) console.log('No browser origins enabled; configure TRANSIT_ALLOWED_ORIGINS before connecting Hub');
 const catalog = new Catalog({ feeds: (process.env.TRANSIT_FEEDS ?? 'toei').split(',').map(s => s.trim()),
   odptKey: process.env.ODPT_KEY, challengeKey: process.env.ODPT_CHALLENGE_KEY,
   restrictedApproved: process.env.ODPT_SERVICE_TERMS_CONFIRMED === 'true' });

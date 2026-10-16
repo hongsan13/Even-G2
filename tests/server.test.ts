@@ -1,4 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
+import { serviceOrigins } from '../server/settings';
 import { service, type ServiceCatalog } from '../server/app';
 import { data, favorite } from './fixtures';
 import type { AddressInfo } from 'node:net';
@@ -43,4 +44,13 @@ it('巨大要求と検索エラーは一般エラーにし、キーを漏らさ�
   expect(response.status).toBe(503); expect(await response.text()).not.toContain('synthetic-private-key');
   const large = await fetch(`${base}/v1/journeys`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:'x'.repeat(10000)})});
   expect(large.status).toBe(503);
+});
+
+it('Renderの自動URLで管理を開始し、Hub originを推測・無条件許可しない', () => {
+  expect(serviceOrigins('', 'https://transit-example.onrender.com')).toEqual(['https://transit-example.onrender.com']);
+  expect(serviceOrigins('https://hub.example,https://hub.example/', 'https://transit-example.onrender.com')).toEqual(['https://hub.example','https://transit-example.onrender.com']);
+  expect(serviceOrigins()).toEqual([]);
+  expect(() => serviceOrigins('*')).toThrow();
+  expect(() => serviceOrigins('https://user:synthetic@example.com')).toThrow();
+  expect(() => serviceOrigins('https://example.com/path')).toThrow();
 });

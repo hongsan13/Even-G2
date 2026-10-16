@@ -24,6 +24,10 @@
 
 初期設定は**都営公開データのみ**。認証事業者はキーを入れるだけでは有効にならず、`ODPT_SERVICE_TERMS_CONFIRMED=true`も必要。これは利用許諾の自動判定や許諾取得の代わりではない。実際の認証取得・一般公開の利用条件確認・実機検証は未完了。
 
+## 初めての配置はRender設定を使う
+
+[初心者向けの操作手順](RENDER_SETUP.md)と[配置開始リンク](https://render.com/deploy?repo=https://github.com/hongsan13/Even-G2)を用意しました。RenderはNode.jsの標準実行環境を使い、Dockerイメージを自分で作らずに配置できます。Docker構成も引き続き使えます。Render上では発行された自身のURLを管理用originに自動追加するため、最初のサーバー起動にHubのorigin入力は不要です。Hub実機の接続許可はURL発行後に確認します。無料構成は休止があり試用向けです。
+
 ## Dockerで起動
 
 Node.js 24、npm、Dockerを用意する。キーはチャット・GitHub・イメージのビルド引数へ入れない。
@@ -51,7 +55,7 @@ docker run --rm -p 127.0.0.1:8080:8080 \
 
 | 設定名 | 用途 |
 |---|---|
-| `TRANSIT_ALLOWED_ORIGINS` | 利用するEven Hub WebViewの正確なoriginをカンマ区切り。初期値なし・`*`にしない。実機のoriginは未確認なので配置後に確認する。ローカル検証用originを本番へ持ち込まない。 |
+| `TRANSIT_ALLOWED_ORIGINS` | 利用するEven Hub WebViewの正確なoriginをカンマ区切り。明示設定がない場合はブラウザ接続を許可しない。Render上は自身の発行URLを自動追加する。`*`にしない。実機のoriginは未確認なので配置後に確認する。ローカル検証用originを本番へ持ち込まない。 |
 | `TRANSIT_FEEDS` | `toei`など最大8配布元。初期値は`toei`。 |
 | `ODPT_KEY` | 通常ODPTトークン。ホストのシークレット設定へ。 |
 | `ODPT_CHALLENGE_KEY` | チャレンジ専用トークン。参加条件・許諾期間を確認する。 |

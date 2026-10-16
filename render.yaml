@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+services:
+  - type: web
+    name: transit-hud
+    runtime: node
+    plan: free
+    region: singapore
+    branch: main
+    buildCommand: npm ci --include=dev && npm run server:build
+    startCommand: npm run server:start
+    healthCheckPath: /healthz
+    autoDeployTrigger: "off"
+    envVars:
+      - key: NODE_VERSION
+        value: "24"
+      - key: TRANSIT_FEEDS
+        value: toei
+      - key: ODPT_SERVICE_TERMS_CONFIRMED
+        value: "false"
+      - key: TRANSIT_ADMIN_TOKEN
+        generateValue: true

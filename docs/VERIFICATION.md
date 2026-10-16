@@ -147,3 +147,7 @@ releases/transit-hud-0.3.3.ehpk、848405 bytes。SHA-256: `0c56485d14a69d3678e83
 
 現在の成果物は接続先未設定の互換版: `releases/transit-hud-0.4.0.ehpk`、**848614 bytes**。
 SHA-256: `c81530d70063da7f287fd4a07ce6ece6eded64b31bea39740c8d893e23009491`。
+
+## Render配置設定（2026-10-16）
+
+Render公式Blueprint仕様のJSON Schemaでrender.yamlを検証成功。TypeScript・Vitest101件/12files・サーバービルド成功。RENDER_EXTERNAL_URLに検証用HTTPS originを指定し、ローカルでhealth200、catalog200、149駅/6路線、同一originのCORS応答を確認。ワイルドカード/鍵入り/パス付きoriginの拒否も検証。Renderアカウント操作・実配置・Live URLへの通信・実料金表示・G2接続は未実施。.ehpkの変更はなし。

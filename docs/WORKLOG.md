@@ -96,3 +96,11 @@
 - Docker runtimeのビルドと非root起動、health200、catalog149駅/6路線/0便、実検索6候補を確認。最初のコンテナ起動でpackage.jsonの所有者を修正して再検証。multi-stage Dockerfileはnpm ciが完了せず中断し、未検証と区別。
 - TypeScript/フロントとサーバーのVite/公式pack・差分チェック成功。SDK互換表取得警告は継続、min_app_version2.2.10を保持。起動手順とinstall_scriptを環境設定ドラフトへ保存（サービス公開とは別）。
 - 公開先・HTTPS・実WebView origin/CORS・ホストのログ運用・認証事業者の提供範囲・G2実機確認が残る。キーはチャットへ送らず運用先に設定。配置手順はdocs/ONLINE_SERVICE.md。
+
+## 2026-10-16 — Renderの配置設定・初心者向け導入
+
+- Render公式Blueprint仕様・配置リンク・無料枠の説明を確認し、render.yamlと配置開始リンクを用意。Node 24/Free/Singapore/都営のみ/管理トークン自動生成/健康確認/自動再配置停止を設定。
+- Renderの自動発行URLを管理用originへ追加し、未知のHub originを推測せず初期サーバーを起動可能にした。設定がない他環境はブラウザoriginを許可しない。機密入りURLやワイルドカードを拒否。
+- Render公式JSON Schemaで検証成功。YAMLのoffを文字列として明示。TypeScript・Vitest101件・サーバービルド成功。Render相当の環境設定でローカル起動・149駅/6路線取得を検証。
+- Renderへの操作接続・API認証は環境にないため、アカウント作成・実配置は未実施。登録/ログインと初回配置だけ本人操作とし、URL発行後にこちらで接続先入りHubファイルを作る手順をdocs/RENDER_SETUP.mdへ記載。ODPTトークンは最初の配置では不要。
+- クライアントの変更はなく.ehpkは再生成していない。無料サービスの休止/復帰・上限、有料変更を自動設定しないことを説明。
