@@ -87,9 +87,13 @@ export function mountSettings(root: HTMLElement): void {
       <p class="hint">設定と時刻表は端末に保存します。位置情報・連絡先・マイクは使用しません。乗車モードは手動で開始し、予定時刻で次の行動を切り替えます。列車への乗車・実際の到着を検知する機能ではありません。</p>
       <details><summary>デバッグ情報・バージョン</summary><pre id="debug"></pre></details>
     </section>
-  </main><footer>Transit HUD 0.4.4 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
+  </main><footer>Transit HUD 0.4.5 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
   if (TRANSIT_SERVICE_URL) {
-    root.querySelector('main')!.prepend(root.querySelector('#favorite-editor')!.closest('section.card')!);
+    const searchCard = root.querySelector('#favorite-editor')!.closest('section.card')!;
+    const fold = document.createElement('details'); fold.className = 'route-search';
+    fold.innerHTML = '<summary>ルート検索<span>出発・到着を選ぶ</span></summary>';
+    searchCard.querySelector('.section-heading')!.remove();
+    fold.append(root.querySelector('#favorite-editor')!); searchCard.append(fold);
     // Retain internal controls for legacy handlers while keeping the online product UI focused.
     const dataSettings = root.querySelector('#dataset')!.closest<HTMLElement>('details.card')!;
     dataSettings.hidden = true;
@@ -138,7 +142,7 @@ export function favoriteEditor(root: HTMLElement, data: Timetable | null, favori
     const retained = document.createElement('div'); retained.hidden = true;
     while (form.firstChild) retained.append(form.firstChild);
     form.append(retained); form.classList.add('simple-route-form');
-    for (const [name, caption] of [['from', '出発駅'], ['to', '到着駅'], ['transferAt', '乗換駅（任意）']]) {
+    for (const [name, caption] of [['from', '出発駅'], ['to', '到着駅']]) {
       const label = retained.querySelector<HTMLSelectElement>(`select[name="${name}"]`)!.closest('label')!;
       label.classList.add('station-field');
       label.firstChild!.textContent = caption;
@@ -146,19 +150,51 @@ export function favoriteEditor(root: HTMLElement, data: Timetable | null, favori
       const input = label.querySelector<HTMLInputElement>('input')!;
       input.placeholder = '駅名を入力';
     }
+    const waypoints = document.createElement('div'); waypoints.className = 'route-waypoints';
+    const add = document.createElement('button'); add.type = 'button'; add.className = 'secondary add-waypoint'; add.textContent = '＋ 乗換駅を追加';
+    const initial = (f?.via.length ? f.via : [f?.transferAt, f?.secondTransferAt].filter(Boolean)) as string[];
+    const labels: HTMLLabelElement[] = [];
+    const update = () => {
+      labels.forEach((label, i) => {
+        label.firstChild!.textContent = `経由・乗換駅 ${i + 1}`;
+        const select = label.querySelector('select')!; select.name = `via${i}`;
+        const input = label.querySelector('input')!; input.dataset.stationSearch = `via${i}`;
+      });
+      add.hidden = labels.length >= 3;
+    };
+    const addRow = (value = '') => {
+      if (labels.length >= 3) return;
+      const i = labels.length;
+      const holder = document.createElement('div'); holder.innerHTML = picker(`via${i}`, `経由・乗換駅 ${i + 1}`, value, true);
+      const label = holder.firstElementChild as HTMLLabelElement; label.classList.add('station-field');
+      const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'secondary remove-waypoint'; remove.textContent = '削除';
+      remove.addEventListener('click', () => {
+        labels.splice(labels.indexOf(label), 1); label.remove(); update();
+      });
+      label.append(remove); labels.push(label); waypoints.append(label); update();
+      bindStationSearch(label, data);
+    };
+    for (const field of retained.querySelectorAll<HTMLInputElement | HTMLSelectElement>('[name^="via"], [data-station-search^="via"]')) field.remove();
+    initial.slice(0, 3).forEach(value => addRow(value));
+    add.addEventListener('click', () => addRow());
+    form.append(waypoints, add);
+    const hint = document.createElement('p'); hint.className = 'hint'; hint.textContent = '経由・乗換駅は順番に3駅まで指定できます。乗換は最大2回で比較します。'; form.append(hint);
+    const fold = container.closest<HTMLDetailsElement>('details.route-search'); if (f && fold) fold.open = true;
     const swap = retained.querySelector<HTMLButtonElement>('[data-action="swap-stations"]')!;
     swap.textContent = '↑↓ 出発・到着を入れ替え'; form.append(swap);
     const actions = retained.querySelector<HTMLElement>('.actions')!;
     actions.querySelector('button')!.textContent = f ? '変更して検索' : '検索してお気に入りに保存';
     form.append(actions);
     // Simplified searches always compare all lines and up to two transfers.
-    for (const name of ['direction', 'preferred', 'excluded', 'fixed', 'secondTransferAt', 'via0', 'via1', 'via2']) {
+    for (const name of ['direction', 'preferred', 'excluded', 'fixed', 'transferAt', 'secondTransferAt']) {
       const field = retained.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${name}"]`); if (field) field.value = '';
     }
     for (const option of retained.querySelectorAll<HTMLOptionElement>('[name="lines"] option')) option.selected = false;
     (retained.querySelector('[name="transfers"]') as HTMLSelectElement).value = '2';
   }
-  bindStationSearch(container as HTMLElement, data);
+  if (TRANSIT_SERVICE_URL) {
+    for (const label of container.querySelectorAll<HTMLElement>('.simple-route-form > .station-field')) bindStationSearch(label, data);
+  } else bindStationSearch(container as HTMLElement, data);
   const transfers = container.querySelector<HTMLSelectElement>('[name="transfers"]')!;
   const second = container.querySelector<HTMLElement>('#second-transfer-picker')!;
   const toggleSecond = () => { second.hidden = transfers.value !== '2'; for (const field of second.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input, select')) field.disabled = second.hidden; };
