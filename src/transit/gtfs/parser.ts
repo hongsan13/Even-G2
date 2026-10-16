@@ -123,7 +123,8 @@ export function parseGtfsZip(bytes: Uint8Array, meta: ImportMetadata): Timetable
     if (!routeIds.has(routeId) || !serviceIds.has(serviceId)) throw new Error('tripsの路線または運行日がありません');
     if (!['', '0', '1', undefined].includes(r.direction_id)) throw new Error('方向は0または1を指定してください');
     const stops = (stopTimes.get(id) ?? []).sort((a, b) => a.sequence - b.sequence);
-    if (stops.length < 2 || new Set(stops.map(s => s.sequence)).size !== stops.length) throw new Error('停車順序が不正です');
+    // Preserve one-stop records from provider exports; they cannot form a travel leg.
+    if (stops.length < 1 || new Set(stops.map(s => s.sequence)).size !== stops.length) throw new Error('停車順序が不正です');
     if (!stops.some(s => s.departure !== null)) throw new Error(`列車 ${id} に発車時刻がありません`);
     let previousTime = -1;
     stops.forEach(s => {

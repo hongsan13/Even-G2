@@ -58,6 +58,7 @@ export function findJourneys(data: Timetable, favorite: FavoriteRoute, now: numb
   const serviceCache = new Map<string, boolean>();
   const allowTransfer = favorite.maxTransfers >= 1 && favorite.fixedPath.length !== 1;
   for (const date of serviceDates(now)) for (const trip of data.trips) {
+    if (trip.stops.length < 2) continue; // One-stop records never provide a ride or a transfer.
     const serviceKey = `${date}:${trip.serviceId}`;
     if (!serviceCache.has(serviceKey)) serviceCache.set(serviceKey, serviceRuns(data, trip.serviceId, date));
     if (!serviceCache.get(serviceKey) || favorite.excludedLines.includes(trip.routeId)) continue;

@@ -121,3 +121,18 @@ it('別のAzureパスへの転送は取り込まない', async () => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response));
   await expect(refreshGtfs('https://api-public.odpt.org/api/v4/files/Toei/data/Toei-Train-GTFS.zip', ['https://api-public.odpt.org'], metadata, undefined)).rejects.toThrow('転送先');
 });
+
+it('1駅だけのレコードは保持し、乗車経路には使わず他の便を検索できる', () => {
+  const files = {...gtfsFiles,
+    'trips.txt':gtfsFiles['trips.txt'] + 'L1,daily,one-stop,駅A,0\n',
+    'stop_times.txt':gtfsFiles['stop_times.txt'] + 'one-stop,23:58:00,23:58:00,A,1\n'};
+  const d = parseGtfsZip(zip(files),metadata);
+  expect(d.trips.find(t => t.id === 'one-stop')?.stops).toHaveLength(1);
+  const journeys = findJourneys(d,favorite({walkingMinutes:0,bufferMinutes:0,maxTransfers:2}),time('23:50'));
+  expect(journeys.length).toBeGreaterThan(0);
+  expect(journeys.every(j => j.legs.every(l => l.tripId !== 'one-stop'))).toBe(true);
+});
+it('停車なしと停車順の重複は引き続き拒否する', () => {
+  expect(() => parseGtfsZip(zip({...gtfsFiles,'trips.txt':gtfsFiles['trips.txt']+'L1,daily,empty,駅A,0\n'}),metadata)).toThrow('停車順序');
+  expect(() => parseGtfsZip(zip({...gtfsFiles,'stop_times.txt':gtfsFiles['stop_times.txt'].replace(',B,2',',B,1')}),metadata)).toThrow('停車順序');
+});
