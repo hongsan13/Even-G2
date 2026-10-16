@@ -32,7 +32,7 @@ export function hudModel(data: Timetable | null, favorite: FavoriteRoute | undef
   return { title, action: first.departure < now ? '乗車済みならタッチでロック' : label[selected.status], primary: first.departure < now ? `${clock(first.departure)}発 · ${Math.floor((now - first.departure) / MINUTE)}分前` : `${clock(first.departure)}発 · あと${selected.minutesUntilDeparture}分`,
     detail: `${line}${first.delaySeconds ? ` (${Math.round(first.delaySeconds / 60)}分補正)` : ''} ${first.platform ? `${first.platform}番線 ` : ''}${first.headsign}`,
     alternatives: others.map(d => `${d.reachable ? '○' : '×'} ${clock(d.departureTime)} あと${d.minutesUntilDeparture}分`).join('  '),
-    footer: `${name(favorite.to)} ${clock(selected.journey.arrival)}${selected.journey.legs.at(-1)?.arrivalEstimated ? '着目安' : '着'} · 乗換${selected.journey.transfers}回\n${footer}` };
+    footer: `${name(favorite.to)} ${clock(selected.journey.arrival)}${selected.journey.legs.at(-1)?.arrivalEstimated ? '着目安' : '着'} · 乗換${selected.journey.transfers}回${footer ? `\n${footer}` : ''}` };
 }
 const geometry = [
   { y: 4, height: 34 }, { y: 42, height: 34 }, { y: 80, height: 36 },

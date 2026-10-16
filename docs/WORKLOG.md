@@ -120,3 +120,8 @@
 - Vitest104件/13ファイル成功、TypeScript/Vite/公式CLI pack成功。模擬APIのブラウザ1件で初回503から自動回復、手動操作なしの駅準備、表示カード2枚、設定非表示、新規乗換上限2を確認。公開サービス/G2実機の成功とは区別。
 - 公開Renderは今回確認時点でroot404・Origin:nullのcatalog403を返しており旧版のまま。自動配置停止中のため所有者によるManual Deploy → Deploy latest commitが必要。こちらから配置操作はしていない。認証事業者は未有効、現在は都営のみ。
 - 成果物releases/transit-hud-0.4.2.ehpk（850086 bytes）、SHA-256: 5ca4c19ae3a283fafd3a3ce74884e31ba1fda5779d3bd2a612f11dc572e9cea5。
+
+## 2026-10-16 — v0.4.3：HUD下段の状態表示を整理
+
+- ユーザー指定に従い、通常の「時刻表 0時間前・Realtime未取得・予定時刻」の行をHUD/スマホプレビューから除去。到着時刻と乗換回数を保持し、空の末尾行も作らない。有効期限切れと架空サンプルの警告は維持。比較アプリの外観への追従は追加しない。
+- HUD/SDK既存テスト8件、TypeScript、Vite、公式CLIオンラインpack成功。G2実機は未検証。配布物850056 bytes、SHA-256: ef71b955b68aa55cd282a384c718e4943e56b9bf0b8ed499d0f19b89afe282cb。
