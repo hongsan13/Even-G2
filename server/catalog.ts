@@ -1,7 +1,7 @@
 import { ALL_FEEDS, isAuthFeed } from '../src/config';
 import { parseGtfsZip } from '../src/transit/gtfs/parser';
 import { refreshGtfs } from '../src/transit/gtfs/loader';
-import { refreshAuthGtfs } from '../src/transit/odpt/authGtfs';
+import { refreshAuthGtfs, FeedImportError, type FeedFailure } from '../src/transit/odpt/authGtfs';
 import { mergeFeeds, type SavedFeed } from '../src/transit/feeds';
 import { PUBLIC_FEED_ORIGINS, TOEI_FEED } from '../src/config';
 import { readFile } from 'node:fs/promises';
@@ -13,7 +13,7 @@ export class Catalog {
   private feeds: SavedFeed[] = [];
   private refreshing?: Promise<void>;
   private lastAttempt = 0;
-  statuses: { id: string; title: string; status: string }[] = [];
+  statuses: { id: string; title: string; status: string; reason?: FeedFailure }[] = [];
   constructor(private config: { feeds: string[]; odptKey?: string; challengeKey?: string; restrictedApproved: boolean; jsonRoutes?: JsonRoute[]; links?: Transfer[] }) {
     if ((!config.feeds.length && !config.jsonRoutes?.length) || new Set(config.feeds).size !== config.feeds.length || config.feeds.length + (config.jsonRoutes?.length ?? 0) > 8 || config.feeds.some(id => !ALL_FEEDS.some(f => f.id === id))) throw new Error('TRANSIT_FEEDS must select 1–8 catalog IDs');
   }
@@ -44,14 +44,14 @@ export class Catalog {
           const result = isAuthFeed(feed)
             ? await refreshAuthGtfs(feed, feed.auth === 'challenge' ? this.config.challengeKey ?? '' : this.config.odptKey ?? '', existing, parse)
             : await refreshGtfs(feed.url, PUBLIC_FEED_ORIGINS, feed, existing, parse);
-          if (result.fallback) throw new Error('Update unavailable');
+          if (result.fallback) throw new FeedImportError('reason' in result ? result.reason ?? 'network' : 'network');
           next = result.cache;
         }
         const proposed = [...this.feeds.filter(f => f.feedId !== id), { data: next.data, checkedAt: Date.now(), feedId: id }];
-        mergeFeeds(proposed); // Enforce resource limits before replacing a working generation.
+        try { mergeFeeds(proposed); } catch { throw new FeedImportError('merge-limit'); } // Retain a working generation.
         this.feeds = proposed;
         this.statuses.push({ id, title: feed.title, status: 'ready' });
-      } catch { this.statuses.push({ id, title: feed.title, status: existing ? 'update-failed' : 'unavailable' }); }
+      } catch (error) { this.statuses.push({ id, title: feed.title, status: existing ? 'update-failed' : 'unavailable', reason: error instanceof FeedImportError ? error.reason : undefined }); }
     }
     for (const route of this.config.jsonRoutes ?? []) {
       const existing = this.feeds.find(f => f.feedId === route.id);

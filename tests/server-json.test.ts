@@ -63,3 +63,10 @@ it('事業者間連絡は型と徒歩時間を検証し、逆方向を自動生�
   expect(() => serviceLinks('null')).toThrow();
   expect(() => serviceLinks('[{"from":"a","to":"b","seconds":-1}]')).toThrow();
 });
+it('管理状態は認証GTFSのHTTPコードを保持し、認証鍵を含めない', async () => {
+  vi.stubGlobal('fetch',vi.fn().mockImplementation(async () => new Response('synthetic-private-key',{status:403})));
+  const catalog = new Catalog({feeds:['auth-TokyoMetro'],restrictedApproved:true,odptKey:'synthetic-private-key'});
+  await catalog.refresh();
+  expect(catalog.statuses[0]).toMatchObject({status:'unavailable',reason:'http-403'});
+  expect(JSON.stringify(catalog.statuses)).not.toContain('synthetic-private-key');
+});

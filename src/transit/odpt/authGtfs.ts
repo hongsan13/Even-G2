@@ -3,6 +3,12 @@ import { importGtfs, boundedResponse, type RemoteCache } from '../gtfs/loader';
 import { MAX_ZIP_BYTES } from '../gtfs/parser';
 import { jstDate } from '../../utils/time';
 import type { Timetable } from '../types';
+export type FeedFailure = 'network' | 'timeout' | 'redirect' | 'download' | 'parse' | 'size-limit' | 'merge-limit' | `http-${number}`;
+export class FeedImportError extends Error {
+  constructor(public readonly reason: FeedFailure) {
+    super(`認証付きGTFSを取得できません (${reason})。管理画面で取得状態を確認してください`);
+  }
+}
 export function protectTimetable(data: Timetable, licenseUntil?: string): Timetable {
   const validUntil = licenseUntil && (!data.validUntil || licenseUntil < data.validUntil) ? licenseUntil : data.validUntil;
   return { ...data, licenseUntil, validUntil, trips: data.trips.map(t => ({ ...t, readOnly: true })),
@@ -10,15 +16,17 @@ export function protectTimetable(data: Timetable, licenseUntil?: string): Timeta
     exceptions: data.exceptions.filter(e => !validUntil || e.date <= validUntil) };
 }
 export async function refreshAuthGtfs(feed: AuthFeed, key: string, cache?: RemoteCache,
-  parse: typeof importGtfs = importGtfs): Promise<{ cache: RemoteCache; fallback: boolean }> {
+  parse: typeof importGtfs = importGtfs): Promise<{ cache: RemoteCache; fallback: boolean; reason?: FeedFailure }> {
   if (!AUTH_FEEDS.some(f => f.id === feed.id && f.url === feed.url)) throw new Error('確認済みの公式配信元を選択してください');
   if (feed.licenseUntil && jstDate(Date.now()) > feed.licenseUntil) throw new Error('この配信の許諾期間が終了しています');
   if (!key.trim()) throw new Error('ODPT認証設定で必要なトークンを入力してください');
   const original = new URL(feed.url), request = new URL(feed.url);
-  request.searchParams.set('acl:consumerKey', key);
+  request.searchParams.set('acl:consumerKey', key.trim());
+  let stage: FeedFailure = 'network';
   try {
     const response = await fetch(request, { credentials: 'omit', cache: 'no-store', redirect: 'follow', signal: AbortSignal.timeout(20000) });
-    if (!response.ok) throw new Error('request');
+    if (!response.ok) throw new FeedImportError(`http-${response.status}`);
+    stage = 'redirect';
     if (response.url) {
       const final = new URL(response.url);
       const suffix = original.pathname.replace('/api/v4/files/', '/');
@@ -27,11 +35,18 @@ export async function refreshAuthGtfs(feed: AuthFeed, key: string, cache?: Remot
         /^\/[A-Za-z0-9_-]+\//.test(final.pathname) && final.pathname.split('/').length === suffix.split('/').length + 1;
       if (!azure && !(final.origin === original.origin && final.pathname === original.pathname)) throw new Error('redirect');
     }
-    const data = protectTimetable(await parse(await boundedResponse(response, MAX_ZIP_BYTES), feed), feed.licenseUntil);
+    stage = 'download';
+    const bytes = await boundedResponse(response, MAX_ZIP_BYTES);
+    stage = 'parse';
+    const data = protectTimetable(await parse(bytes, feed), feed.licenseUntil);
     return { cache: { data, checkedAt: Date.now() }, fallback: false };
-  } catch {
-    if (cache && (!cache.data.licenseUntil || cache.data.licenseUntil >= jstDate(Date.now()))) return { cache, fallback: true };
+  } catch (error) {
+    const sizeErrors = ['配信ファイルが大きすぎます', 'ZIPは12MB以下に絞ってください', '展開後のGTFSは60MB以下にしてください'];
+    const reason: FeedFailure = error instanceof FeedImportError ? error.reason
+      : error instanceof Error && sizeErrors.includes(error.message) ? 'size-limit'
+      : error instanceof Error && ['TimeoutError','AbortError'].includes(error.name) ? 'timeout' : stage;
+    if (cache && (!cache.data.licenseUntil || cache.data.licenseUntil >= jstDate(Date.now()))) return { cache, fallback: true, reason };
     // Fetch errors may include the request URL. Do not propagate them or a signed redirect.
-    throw new Error('認証付きGTFSを取得できません。トークンの種類・利用条件・ネットワーク権限を確認してください');
+    throw new FeedImportError(reason);
   }
 }

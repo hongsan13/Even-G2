@@ -100,3 +100,29 @@ describe('認証取得と許諾期限', () => {
     expect(() => parseOdpt(railways, stations, trains, { ...meta, licenseUntil: '20270312' })).toThrow('許諾期限');
   });
 });
+
+describe('認証GTFSの安全な失敗理由', () => {
+  it.each([401,403,404,429,503])('HTTP %iを保持し、応答本文とURLの鍵を出さない', async status => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('private-token-in-body',{status})));
+    try { await refreshAuthGtfs(AUTH_FEEDS[0], 'private-token'); expect.fail('must fail'); }
+    catch (error) {
+      expect(error).toMatchObject({reason:`http-${status}`});
+      expect(String(error)).not.toContain('private-token');
+    }
+  });
+  it('取得後の解析失敗とサイズ超過を認証エラーと分ける', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(new Uint8Array([1]))));
+    await expect(refreshAuthGtfs(AUTH_FEEDS[0],'synthetic-token',undefined,async () => { throw new Error('sensitive parser detail'); })).rejects.toMatchObject({reason:'parse'});
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('',{headers:{'Content-Length':'99999999'}})));
+    await expect(refreshAuthGtfs(AUTH_FEEDS[0],'synthetic-token')).rejects.toMatchObject({reason:'size-limit'});
+  });
+  it('鍵の前後の空白を除去し、失敗時も保存済みデータと理由を返す', async () => {
+    const mock = vi.fn().mockResolvedValue(new Response('',{status:403})); vi.stubGlobal('fetch',mock);
+    const cache = {data:protectTimetable(data(),'20270312'),checkedAt:0};
+    const result = await refreshAuthGtfs(AUTH_FEEDS[0],' synthetic-token\n',cache);
+    expect(result).toMatchObject({fallback:true,reason:'http-403'});
+    expect(result.cache).toBe(cache);
+    expect((mock.mock.calls[0][0] as URL).searchParams.get('acl:consumerKey')).toBe('synthetic-token');
+    expect(JSON.stringify(result)).not.toContain('synthetic-token');
+  });
+});
