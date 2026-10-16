@@ -64,3 +64,10 @@ describe('HUD / 公式SDK page validation', () => {
     renderer.resume(); await renderer.render({ ...model, action: 'new' }, []); expect(native.textContainerUpgrade).toHaveBeenCalledOnce();
   });
 });
+
+it('駅一覧取得済みでルート未登録なら取込を要求せず駅選択を促す', () => {
+  const model = hudModel({ ...data(), serverManaged:true }, undefined, [], null, time('13:43'), '');
+  expect(model.primary).toContain('出発駅・到着駅');
+  expect(model.primary).not.toContain('取り込');
+  expect(model.detail).toContain('準備できています');
+});

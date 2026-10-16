@@ -25,7 +25,7 @@ export function mountSettings(root: HTMLElement): void {
       <div id="journey-results" aria-live="polite"></div><div id="past-journeys"></div>
       <div id="routes" class="route-tabs"></div>${TRANSIT_SERVICE_URL ? '<p class="hint">オンライン案内：駅とルートを選ぶだけで利用できます。通信できない場合は新しい案内を取得できません。</p><details><summary>データと利用条件</summary><p class="hint">データ提供：公共交通オープンデータセンター。正確性・完全性は保証されません。駅・事業者の最新案内を確認してください。<a href="https://github.com/hongsan13/Even-G2/issues" target="_blank" rel="noopener noreferrer">アプリのお問い合わせ</a></p></details><button type="button" data-action="sync-online" class="secondary">オンライン駅一覧を更新</button>' : ''}
       <div class="actions"><button data-action="previous" class="secondary">← 前の候補</button><button data-action="next" class="secondary">次の候補 →</button><button data-action="board">この便に乗車</button></div>
-      <p id="journey-note" class="hint"></p><p id="status" role="status" class="notice">時刻表を取り込むか、手入力で登録してください。</p>
+      <p id="journey-note" class="hint"></p><p id="status" role="status" class="notice">${TRANSIT_SERVICE_URL ? 'オンライン駅一覧を準備しています。手動取込は不要です。' : '時刻表を取り込むか、手入力で登録してください。'}</p>
     </section>
     <section class="card"><div class="section-heading"><h2>お気に入り移動</h2><span class="step">01</span></div><div id="favorite-list"></div><div id="favorite-editor"></div></section>
     ${TRANSIT_SERVICE_URL ? '<details class="card"><summary>詳細設定・端末への手動取込</summary>' : ''}<section class="card"><div class="section-heading"><h2>時刻表データ</h2><span class="step">01</span></div><div id="dataset" class="dataset"></div>
@@ -87,7 +87,14 @@ export function mountSettings(root: HTMLElement): void {
       <p class="hint">設定と時刻表は端末に保存します。位置情報・連絡先・マイクは使用しません。乗車モードは手動で開始し、予定時刻で次の行動を切り替えます。列車への乗車・実際の到着を検知する機能ではありません。</p>
       <details><summary>デバッグ情報・バージョン</summary><pre id="debug"></pre></details>
     </section>
-  </main><footer>Transit HUD 0.4.1 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
+  </main><footer>Transit HUD 0.4.2 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
+  if (TRANSIT_SERVICE_URL) {
+    // Retain internal controls for legacy handlers while keeping the online product UI focused.
+    const dataSettings = root.querySelector('#dataset')!.closest<HTMLElement>('details.card')!;
+    dataSettings.hidden = true;
+    root.querySelector('#preferences-form')!.closest<HTMLElement>('section.card')!.hidden = true;
+    root.querySelector<HTMLElement>('[data-action="sync-online"]')!.hidden = true;
+  }
 }
 export function updateHud(root: HTMLElement, model: HudModel): void {
   root.querySelector('#hud')!.innerHTML = `<p class="hud-title">${e(model.title)}</p><p class="hud-action">${e(model.action)}</p>
@@ -100,7 +107,7 @@ export function updateFavoriteControls(root: HTMLElement, settings: Settings): v
 }
 export function favoriteEditor(root: HTMLElement, data: Timetable | null, favorite?: FavoriteRoute): void {
   const container = root.querySelector('#favorite-editor')!;
-  if (!data) { container.innerHTML = '<p class="hint">先に時刻表を登録してください。</p>'; return; }
+  if (!data) { container.innerHTML = TRANSIT_SERVICE_URL ? '<p class="hint">駅一覧の取得を待っています。接続すると自動で表示します。</p>' : '<p class="hint">先に時刻表を登録してください。</p>'; return; }
   const labels = stationLabels(data);
   const stations = data.stations.map(s => ({ ...s, name: labels.get(s.id)! })), f = favorite;
   const picker = (name: string, title: string, selected: string, optional = false) => `<label>${title}<input type="search" data-station-search="${name}" aria-label="${title}を駅名で検索" placeholder="駅名を入力して絞り込み" autocomplete="off"><select name="${name}" aria-label="${title}" ${optional ? '' : 'required'}>${optional ? '<option value="">指定なし</option>' : ''}${options(stations, selected)}</select></label>`;
@@ -110,8 +117,8 @@ export function favoriteEditor(root: HTMLElement, data: Timetable | null, favori
     <button type="button" class="secondary" data-action="swap-stations">出発・到着を入れ替える</button>
     <label>最初に乗る路線（複数選択可 / 未選択なら全て）<select name="lines" multiple size="3">${data.lines.map(l => `<option value="${e(l.id)}" ${f?.lineIds.includes(l.id) ? 'selected' : ''}>${e(l.name)} · ${e(l.id)}</option>`).join('')}</select></label>
     <div class="two"><label>方面<select name="direction"><option value="">指定なし</option><option value="0" ${f?.direction === '0' ? 'selected' : ''}>0 · GTFSの方向</option><option value="1" ${f?.direction === '1' ? 'selected' : ''}>1 · GTFSの方向</option></select></label>
-    <label>最大乗換<select name="transfers"><option value="0" ${f?.maxTransfers === 0 ? 'selected' : ''}>直通のみ</option><option value="1" ${(f?.maxTransfers ?? 1) === 1 ? 'selected' : ''}>1回</option><option value="2" ${f?.maxTransfers === 2 ? 'selected' : ''}>2回</option></select></label></div>
-    <div class="three"><label>徒歩（分）<input type="number" name="walk" min="0" max="120" step="0.5" value="${f?.walkingMinutes ?? 7}" required></label>
+    <label>経路の比較<select name="transfers"><option value="2" ${(f?.maxTransfers ?? 2) === 2 ? 'selected' : ''}>自動比較（最大2回乗換）</option><option value="1" ${f?.maxTransfers === 1 ? 'selected' : ''}>乗換は1回まで</option><option value="0" ${f?.maxTransfers === 0 ? 'selected' : ''}>直通のみ</option></select></label></div>
+    <p class="hint">直通・乗換の到着時刻を比較し、最も早く着く経路をおすすめします。徒歩と乗換余裕も考慮します。</p><div class="three"><label>徒歩（分）<input type="number" name="walk" min="0" max="120" step="0.5" value="${f?.walkingMinutes ?? 7}" required></label>
       <label>発車前余裕（分）<input type="number" name="buffer" min="0" max="120" step="0.5" value="${f?.bufferMinutes ?? 2}" required></label>
       <label>乗換余裕（分）<input type="number" name="transferBuffer" min="0" max="120" step="0.5" value="${f?.transferMinutes ?? 4}" required></label></div>
     ${picker('transferAt', '最初の乗換駅（任意）', f?.transferAt ?? '', true)}

@@ -6,7 +6,7 @@ async function request(base: string, path: string, init: RequestInit = {}, signa
   return JSON.parse(new TextDecoder().decode(await boundedResponse(response, 4 * 1024 * 1024)));
 }
 export async function onlineCatalog(base: string): Promise<Timetable> {
-  const d = await request(base, '/v1/catalog') as Timetable;
+  const d = await request(base, '/v1/catalog', {}, AbortSignal.timeout(90000)) as Timetable;
   if (d.schema !== 1 || d.timezone !== 'Asia/Tokyo' || d.serverManaged !== true || !Array.isArray(d.stations) || d.stations.length > 10000 || !Array.isArray(d.lines) || d.lines.length > 1000 || typeof d.id !== 'string' ||
     !d.stations.every(s => typeof s.id === 'string' && typeof s.name === 'string') || !d.lines.every(l => typeof l.id === 'string' && typeof l.name === 'string') ||
     !Number.isFinite(d.importedAt) || typeof d.source !== 'string' || typeof d.license !== 'string' || typeof d.title !== 'string' || d.validUntil !== undefined && !/^\d{8}$/.test(d.validUntil)) throw new Error('オンライン駅一覧の形式を確認できません');

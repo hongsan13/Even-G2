@@ -11,7 +11,8 @@ export function hudModel(data: Timetable | null, favorite: FavoriteRoute | undef
   const name = (id: string) => data?.stations.find(s => s.id === id)?.name ?? id;
   const title = favorite ? `${name(favorite.from)} → ${name(favorite.to)}` : 'Transit HUD';
   const footer = data?.demo ? '架空サンプル · 乗車案内には使えません' : note;
-  if (!data || !favorite) return { title, action: 'スマホで初期設定', primary: '時刻表を取り込んでください', detail: 'GTFS ZIP → ルート登録', alternatives: '', footer };
+  if (!data) return { title, action: 'スマホで初期設定', primary: '時刻表を取り込んでください', detail: 'GTFS ZIP → ルート登録', alternatives: '', footer };
+  if (!favorite) return { title, action: 'スマホでルート登録', primary: '出発駅・到着駅を選んでください', detail: '駅一覧は準備できています', alternatives: '', footer };
   if (journey) {
     const legs = journey.journey.legs;
     const current = legs.find(l => now < l.arrival);

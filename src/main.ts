@@ -36,6 +36,8 @@ let selectedId: string | null = null, riding: Departure | undefined;
 let updates: RealtimeUpdate[] = [], realtimeNote = 'Realtime未取得 · 予定時刻';
 let manualDate: string | null = null, busy = false, glassActive = true;
 let initializing = true;
+let onlineState: 'loading' | 'ready' | 'error' = 'loading';
+let lastOnlineAttempt = 0, lastOnlineSuccess = 0;
 let routeViewportAnchor: { element: HTMLElement; top: number } | undefined;
 for (const type of ['pointerdown', 'touchstart', 'wheel', 'keydown']) window.addEventListener(type, () => { routeViewportAnchor = undefined; }, { passive: true });
 let history: Departure[] = [];
@@ -62,7 +64,7 @@ function metadata(): void {
     ${data.stations.length}駅 / ${data.lines.length}路線 / ${data.serverManaged ? 'オンライン検索' : `${data.trips.length}便`}<br>
     出典: ${escapeHtml(data.source)}<br>利用条件: ${escapeHtml(data.license)}<br>
     最終取込: ${jstDate(data.importedAt)} ${clock(data.importedAt)} JST<br>有効終了: ${escapeHtml(data.validUntil ?? 'フィード内の運行日による')}<br>版: ${escapeHtml(data.version ?? '記載なし')}`
-    : '時刻表はまだ登録されていません。公式に利用可能なGTFS ZIPを端末から取り込むか、時刻表を手入力してください。';
+    : TRANSIT_SERVICE_URL ? (onlineState === 'error' ? 'オンライン駅一覧に接続できません。自動で再試行します。通信状態を確認してください。' : 'オンライン駅一覧を取得しています。時刻表の手動取込は不要です。') : '時刻表はまだ登録されていません。公式に利用可能なGTFS ZIPを端末から取り込むか、時刻表を手入力してください。';
   root.querySelector('#feed-list')!.innerHTML = savedFeeds(cache).map(f => `<div class="feed-row"><strong>${escapeHtml(f.data.title)}</strong><small>版 ${escapeHtml(f.data.version ?? '記載なし')} · 有効終了 ${escapeHtml(f.data.validUntil ?? '記載なし')} · ${f.odpt ? '公式JSONオンライン更新可' : f.url ? new URL(f.url).searchParams.has('date') ? '日付固定版・最新版はカタログ確認' : 'オンライン更新可' : 'ファイルから更新'}${dataExpired(f.data, Date.now()) ? ' · 有効期限切れ' : ''}</small><small>最終確認 ${f.checkedAt ? `${jstDate(f.checkedAt)} ${clock(f.checkedAt)}` : 'オンライン未確認（同梱データ）'}</small><button type="button" data-remove-feed="${escapeHtml(f.feedId)}" class="danger">この地域のデータを削除</button></div>`).join('');
   const targets = root.querySelector<HTMLSelectElement>('[name="feedTarget"]')!;
   const previousTarget = targets.value;
@@ -74,7 +76,7 @@ function metadata(): void {
   jsonTargets.value = jsonTarget;
   root.querySelector<HTMLInputElement>('#auto-update')!.checked = autoUpdate;
   root.querySelector('#connection')!.textContent = nativeLabel;
-  root.querySelector('#debug')!.textContent = `Transit HUD 0.4.1\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
+  root.querySelector('#debug')!.textContent = `Transit HUD 0.4.2\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
 }
 function refreshControls(preserveEditor = false): void {
   const previous = preserveEditor ? root.querySelector<HTMLFormElement>('#favorite-form') : null;
@@ -126,6 +128,12 @@ function draw(now = Date.now()): void {
   // Retain an explicit selection while a recently departed journey is still underway.
   if (selectedId && ![...history, ...departures].some(d => d.journey.id === selectedId)) selectedId = null;
   const model = hudModel(data, favorite, selectedId ? [...history, ...departures] : departures, selectedId, now, note, riding);
+  if (TRANSIT_SERVICE_URL && !data && !riding) {
+    model.action = onlineState === 'error' ? 'オンライン接続を確認' : 'オンライン駅一覧を準備中';
+    model.primary = onlineState === 'error' ? '自動で接続を再試行します' : 'サーバーの起動を待っています';
+    model.detail = onlineState === 'error' ? '通信状態を確認してください' : '無料サーバーは約1分かかる場合があります';
+    model.alternatives = '時刻表の手動取込は不要です';
+  }
   if (!validRoute && !riding) { model.action = '更新後のルートを確認'; model.primary = '駅や路線が変更されています。編集してください'; }
   if (favorite && validRoute && !usable && !riding) { model.action = '登録ルートの使用曜日外'; model.primary = '別のルートを選択'; }
   if (expired && !riding) { model.action = '時刻表の有効期限切れ'; model.primary = 'スマホで更新してください'; }
@@ -134,7 +142,8 @@ function draw(now = Date.now()): void {
   if (cache?.edits?.length) model.footer += '\n手動補正あり（公式時刻ではありません）';
   updateHud(root, model);
   const shown = departures.filter(d => d.reachable).sort((a, b) => a.journey.arrival - b.journey.arrival || a.departureTime - b.departureTime).slice(0, 3);
-  root.querySelector('#journey-results')!.innerHTML = shown.map(d => `<article class="journey-card"><button type="button" class="secondary" data-journey="${escapeHtml(d.journey.id)}">${clock(d.departureTime)}発 → ${clock(d.journey.arrival)}${d.journey.legs.at(-1)?.arrivalEstimated ? '着目安' : '着'} · 乗換${d.journey.transfers}回</button><p>家を出る目安 ${clock(d.leaveAt)} · 徒歩${favorite?.walkingMinutes ?? 0}分＋余裕${favorite?.bufferMinutes ?? 0}分</p>${d.journey.legs.map((l, i) => `<p>${i ? '乗換 → ' : ''}${escapeHtml(data!.stations.find(s => s.id === l.from)?.name ?? l.from)} ${clock(l.departure)} → ${escapeHtml(data!.stations.find(s => s.id === l.to)?.name ?? l.to)} ${clock(l.arrival)}${l.arrivalEstimated ? '着目安' : '着'}<br><small>${escapeHtml(data!.lines.find(x => x.id === l.routeId)?.name ?? l.routeId)} · ${escapeHtml(l.headsign)}</small></p>`).join('')}</article>`).join('');
+  const recommendation = recommendedDeparture(departures);
+  root.querySelector('#journey-results')!.innerHTML = shown.map(d => `<article class="journey-card">${d.journey.id === recommendation?.journey.id ? '<strong>おすすめ · 最も早い到着</strong>' : ''}<button type="button" class="secondary" data-journey="${escapeHtml(d.journey.id)}">${clock(d.departureTime)}発 → ${clock(d.journey.arrival)}${d.journey.legs.at(-1)?.arrivalEstimated ? '着目安' : '着'} · 乗換${d.journey.transfers}回</button><p>家を出る目安 ${clock(d.leaveAt)} · 徒歩${favorite?.walkingMinutes ?? 0}分＋余裕${favorite?.bufferMinutes ?? 0}分</p>${d.journey.legs.map((l, i) => `<p>${i ? '乗換 → ' : ''}${escapeHtml(data!.stations.find(s => s.id === l.from)?.name ?? l.from)} ${clock(l.departure)} → ${escapeHtml(data!.stations.find(s => s.id === l.to)?.name ?? l.to)} ${clock(l.arrival)}${l.arrivalEstimated ? '着目安' : '着'}<br><small>${escapeHtml(data!.lines.find(x => x.id === l.routeId)?.name ?? l.routeId)} · ${escapeHtml(l.headsign)}</small></p>`).join('')}</article>`).join('');
   root.querySelector('#past-journeys')!.innerHTML = history.length ? `<details><summary>すでに乗車中の便を選ぶ（過去60分・到着前）</summary>${[...history].reverse().map(d => `<button type="button" class="secondary" data-journey="${escapeHtml(d.journey.id)}">${clock(d.departureTime)}発 → ${clock(d.journey.arrival)}着 · 乗換${d.journey.transfers}回</button>`).join('')}<p class="hint">乗っている便を選び、タッチまたは乗車ボタンでロックしてください。</p></details>` : '';
   root.querySelector('[data-action="board"]')!.textContent = riding ? '乗車モードを終了' : 'この便に乗車';
   root.querySelector('#journey-note')!.textContent = riding ? 'タッチで乗車モード終了。手動乗車モード：予定時刻で行動を切り替えています。実際の乗車・降車は検知していません。' : 'スワイプ：候補を前後（過去60分まで） · タッチ：選んだ便の乗車モード · 長押し：公式メニュー · ダブルTap：終了';
@@ -254,11 +263,17 @@ async function downloadFeed(feed: typeof ALL_FEEDS[number]): Promise<void> {
 }
 async function syncOnline(): Promise<void> {
   if (!TRANSIT_SERVICE_URL) throw new Error('オンライン接続先が未設定です');
-  const data = await onlineCatalog(TRANSIT_SERVICE_URL);
-  const next = { data, checkedAt: Date.now() };
-  await cachePort.set(DATA_KEY, JSON.stringify(next)); cache = next;
-  updates = []; selectedId = null; riding = undefined; invalidate(); refreshControls(true); draw();
-  message('オンライン駅一覧を更新しました。時刻表の手動取込は不要です。');
+  lastOnlineAttempt = Date.now(); onlineState = 'loading'; message('オンライン駅一覧を取得しています。無料サーバーの起動には約1分かかる場合があります。'); metadata(); draw();
+  try {
+    const data = await onlineCatalog(TRANSIT_SERVICE_URL);
+    const next = { data, checkedAt: Date.now() };
+    await cachePort.set(DATA_KEY, JSON.stringify(next)); cache = next;
+    lastOnlineSuccess = Date.now(); onlineState = 'ready'; updates = []; selectedId = null; riding = undefined; invalidate(); refreshControls(true); draw();
+    message('駅一覧の準備ができました。出発駅・到着駅を選んでルートを登録してください。');
+  } catch {
+    onlineState = 'error'; metadata(); draw();
+    throw new Error('サーバーに接続できません。通信状態を確認してください。自動で再試行します。手動取込は不要です。');
+  }
 }
 async function refreshRemote(): Promise<void> {
   if (cache?.data.serverManaged) { await syncOnline(); return; }
@@ -293,12 +308,15 @@ function startTimer(): void {
   if (interval) clearInterval(interval);
   interval = setInterval(() => {
     const now = Date.now();
+    if (TRANSIT_SERVICE_URL && !busy && (onlineState === 'error' && now - lastOnlineAttempt >= 30000 || onlineState === 'ready' && now - lastOnlineSuccess >= 86400000 && !riding && !root.querySelector('#favorite-form:focus-within'))) {
+      void run(syncOnline); return;
+    }
     if (!busy && removeExpiredLicensedFeeds(cache, now) !== cache) { void run(pruneLicensedFeeds); return; }
     if (freshRealtime(updates, now).length !== updates.length) { updates = freshRealtime(updates, now); realtimeNote = 'Realtime期限切れ · 予定時刻'; invalidate(); }
     const id = autoFavorite(settings, now, manualDate);
     if (!busy && !riding && id !== settings.activeId) void run(() => selectRoute(id, false));
     draw(now);
-    if (!busy && autoUpdate && (cache?.data.serverManaged || savedFeeds(cache).some(f => f.url || f.odpt)) && !root.querySelector('#favorite-form:focus-within, #timetable-form:focus-within') && now - lastRemoteCheck > 86_400_000) {
+    if (!TRANSIT_SERVICE_URL && !busy && autoUpdate && (cache?.data.serverManaged || savedFeeds(cache).some(f => f.url || f.odpt)) && !root.querySelector('#favorite-form:focus-within, #timetable-form:focus-within') && now - lastRemoteCheck > 86_400_000) {
       lastRemoteCheck = now; void run(refreshRemote);
     } else if (!busy && settings.useRealtime && remote.realtimeUrl && now - lastRealtimeCheck > 60_000) {
       lastRealtimeCheck = now; void run(refreshRealtime);
@@ -519,7 +537,7 @@ async function initialize(): Promise<void> {
     if (cache) message(cache.data.demo ? '架空サンプルが保存されています。乗車案内には使えません。' : '保存済み時刻表を読み込みました。');
   } catch (error) { settings = emptySettings(); message(`保存内容を読み込めませんでした。${errorMessage(error)}。時刻表を再登録してください。`, true); }
   if (TRANSIT_SERVICE_URL) {
-    try { await syncOnline(); } catch { message('オンライン駅一覧に接続できません。接続状態を確認し、更新を押してください。', true); }
+    try { await syncOnline(); } catch (error) { message(errorMessage(error), true); }
   }
   if (!TRANSIT_SERVICE_URL && !cache && await preferences.get('transit-hud.initial-data') !== 'disabled') {
     try {
