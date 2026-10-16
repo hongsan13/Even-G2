@@ -7,14 +7,14 @@ test('初回からトークン・時刻表取込なしで駅選択、サーバ�
   await expect(page.locator('#auth-form')).toBeHidden();
   await page.locator('#favorite-form [name="from"]').selectOption('438');
   await page.locator('#favorite-form [name="to"]').selectOption('428');
-  await page.locator('#favorite-form [name="name"]').fill('個人の通学ルート');
   const query = page.waitForRequest(r => r.url().endsWith('/v1/journeys'));
-  await page.getByRole('button', { name:'ルートを登録', exact:true }).click();
+  await page.getByRole('button', { name:'検索してお気に入りに保存', exact:true }).click();
   const sent = (await query).postData()!; expect(sent).not.toContain('個人の通学ルート');
   await expect(page.locator('#journey-results')).toContainText('新宿', { timeout:30000 });
-  await expect(page.locator('#routes')).toContainText('個人の通学ルート');
+  await page.locator('.saved-routes > summary').click();
+  await expect(page.locator('#routes')).toContainText('練馬春日町→新宿');
   expect(requests.some(u => u.includes('api.odpt.org') || u.includes('api-challenge.odpt.org') || u.includes('consumerKey'))).toBe(false);
-  await page.reload(); await expect(page.locator('#routes')).toContainText('個人の通学ルート');
+  await page.reload(); await expect(page.locator('#routes')).toContainText('練馬春日町→新宿');
   await expect(page.locator('#journey-results')).toContainText('新宿', { timeout:30000 });
   expect(errors).toEqual([]);
 });
@@ -25,6 +25,7 @@ test('初回接続失敗から自動回復し、表示とお気に入りだけ�
   await page.addInitScript(() => {
     const original = window.fetch.bind(window); let attempts = 0;
     window.fetch = async (input, init) => {
+      if (String(input).endsWith('/v1/journeys')) { sessionStorage.setItem('test-journey-query', String(init?.body)); return new Response(JSON.stringify({journeys:[],expiresAt:Date.now()+60000})); }
       if (!String(input).endsWith('/v1/catalog')) return original(input, init);
       if (++attempts === 1) return new Response('{}', {status:503});
       return new Response(JSON.stringify({schema:1,id:'online-fixture',title:'test',source:'synthetic fixture',license:'CC0',timezone:'Asia/Tokyo',importedAt:Date.now(),serverManaged:true,
@@ -45,4 +46,21 @@ test('初回接続失敗から自動回復し、表示とお気に入りだけ�
   await expect(page.locator('#favorite-form')).toBeVisible();
   await expect(page.locator('#favorite-form [name="transfers"]')).toHaveValue('2');
   await expect(page.locator('#status')).toContainText('ルートを登録');
+  await expect(page.locator('#favorite-form input:visible')).toHaveCount(3);
+  await expect(page.locator('#favorite-form select:visible')).toHaveCount(3);
+  await expect(page.locator('.saved-routes')).not.toHaveAttribute('open');
+  await expect(page.locator('#favorite-list')).toBeHidden();
+  await page.getByRole('searchbox', {name:'出発駅を駅名で検索'}).fill('試験駅B');
+  await expect(page.locator('#favorite-form [name="from"]')).toHaveValue('B');
+  await page.getByRole('button', {name:'↑↓ 出発・到着を入れ替え',exact:true}).click();
+  await expect(page.locator('#favorite-form [name="to"]')).toHaveValue('B');
+  await page.locator('.saved-routes > summary').click();
+  await expect(page.locator('.saved-routes')).toHaveAttribute('open', '');
+  await page.locator('#favorite-form [name="from"]').selectOption('A');
+  await page.getByRole('button',{name:'検索してお気に入りに保存',exact:true}).click();
+  await expect.poll(() => page.evaluate(() => sessionStorage.getItem('test-journey-query'))).not.toBeNull();
+  const sent = JSON.parse((await page.evaluate(() => sessionStorage.getItem('test-journey-query')))!);
+  expect(sent).toMatchObject({from:'A',to:'B',maxTransfers:2,lineIds:[],via:[]});
+  await expect(page.locator('#routes')).toContainText('試験駅A→試験駅B');
+  await page.screenshot({path:'/tmp/transit-simple-route.png',fullPage:true});
 });

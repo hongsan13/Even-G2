@@ -23,11 +23,11 @@ export function mountSettings(root: HTMLElement): void {
     <section class="card live-card" aria-labelledby="live-title"><div class="section-heading"><h2 id="live-title">次の行動</h2><span id="connection" class="pill">接続確認中</span></div>
       <div id="hud" class="hud" aria-live="polite"></div>
       <div id="journey-results" aria-live="polite"></div><div id="past-journeys"></div>
-      <div id="routes" class="route-tabs"></div>${TRANSIT_SERVICE_URL ? '<p class="hint">オンライン案内：駅とルートを選ぶだけで利用できます。通信できない場合は新しい案内を取得できません。</p><details><summary>データと利用条件</summary><p class="hint">データ提供：公共交通オープンデータセンター。正確性・完全性は保証されません。駅・事業者の最新案内を確認してください。<a href="https://github.com/hongsan13/Even-G2/issues" target="_blank" rel="noopener noreferrer">アプリのお問い合わせ</a></p></details><button type="button" data-action="sync-online" class="secondary">オンライン駅一覧を更新</button>' : ''}
+      <details class="saved-routes"><summary>お気に入り</summary><div id="routes" class="route-tabs"></div><div id="favorite-list"></div></details>${TRANSIT_SERVICE_URL ? '<p class="hint">オンライン案内：駅とルートを選ぶだけで利用できます。通信できない場合は新しい案内を取得できません。</p><details><summary>データと利用条件</summary><p class="hint">データ提供：公共交通オープンデータセンター。正確性・完全性は保証されません。駅・事業者の最新案内を確認してください。<a href="https://github.com/hongsan13/Even-G2/issues" target="_blank" rel="noopener noreferrer">アプリのお問い合わせ</a></p></details><button type="button" data-action="sync-online" class="secondary">オンライン駅一覧を更新</button>' : ''}
       <div class="actions"><button data-action="previous" class="secondary">← 前の候補</button><button data-action="next" class="secondary">次の候補 →</button><button data-action="board">この便に乗車</button></div>
       <p id="journey-note" class="hint"></p><p id="status" role="status" class="notice">${TRANSIT_SERVICE_URL ? 'オンライン駅一覧を準備しています。手動取込は不要です。' : '時刻表を取り込むか、手入力で登録してください。'}</p>
     </section>
-    <section class="card"><div class="section-heading"><h2>お気に入り移動</h2><span class="step">01</span></div><div id="favorite-list"></div><div id="favorite-editor"></div></section>
+    <section class="card"><div class="section-heading"><h2>ルート検索</h2><span class="step">SEARCH</span></div><div id="favorite-editor"></div></section>
     ${TRANSIT_SERVICE_URL ? '<details class="card"><summary>詳細設定・端末への手動取込</summary>' : ''}<section class="card"><div class="section-heading"><h2>時刻表データ</h2><span class="step">01</span></div><div id="dataset" class="dataset"></div>
       <div id="feed-list"></div>
       <form id="catalog-form"><label>追加する地域・事業者<select name="feed">${ALL_FEEDS.map(f => `<option value="${e(f.id)}">${e(f.region)} · ${e(f.title)}</option>`).join('')}</select></label>
@@ -87,8 +87,9 @@ export function mountSettings(root: HTMLElement): void {
       <p class="hint">設定と時刻表は端末に保存します。位置情報・連絡先・マイクは使用しません。乗車モードは手動で開始し、予定時刻で次の行動を切り替えます。列車への乗車・実際の到着を検知する機能ではありません。</p>
       <details><summary>デバッグ情報・バージョン</summary><pre id="debug"></pre></details>
     </section>
-  </main><footer>Transit HUD 0.4.3 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
+  </main><footer>Transit HUD 0.4.4 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
   if (TRANSIT_SERVICE_URL) {
+    root.querySelector('main')!.prepend(root.querySelector('#favorite-editor')!.closest('section.card')!);
     // Retain internal controls for legacy handlers while keeping the online product UI focused.
     const dataSettings = root.querySelector('#dataset')!.closest<HTMLElement>('details.card')!;
     dataSettings.hidden = true;
@@ -132,6 +133,31 @@ export function favoriteEditor(root: HTMLElement, data: Timetable | null, favori
       <div class="two"><label>開始<input type="time" name="autoStart" value="${e(f?.auto?.start ?? '07:00')}"></label><label>終了<input type="time" name="autoEnd" value="${e(f?.auto?.end ?? '10:00')}"></label></div>
       <div class="days">${checks('autoDays', f?.auto?.days ?? [1, 2, 3, 4, 5])}</div><p class="hint">手動で選んだ日は手動選択を優先します。日付が変わると自動切替を再開します。</p></details>
     <div class="actions"><button type="submit">${f ? '変更を保存' : 'ルートを登録'}</button>${f ? '<button type="button" data-action="new-favorite" class="secondary">新規登録へ</button>' : ''}</div></form>`;
+  if (TRANSIT_SERVICE_URL) {
+    const form = container.querySelector<HTMLFormElement>('#favorite-form')!;
+    const retained = document.createElement('div'); retained.hidden = true;
+    while (form.firstChild) retained.append(form.firstChild);
+    form.append(retained); form.classList.add('simple-route-form');
+    for (const [name, caption] of [['from', '出発駅'], ['to', '到着駅'], ['transferAt', '乗換駅（任意）']]) {
+      const label = retained.querySelector<HTMLSelectElement>(`select[name="${name}"]`)!.closest('label')!;
+      label.classList.add('station-field');
+      label.firstChild!.textContent = caption;
+      form.append(label);
+      const input = label.querySelector<HTMLInputElement>('input')!;
+      input.placeholder = '駅名を入力';
+    }
+    const swap = retained.querySelector<HTMLButtonElement>('[data-action="swap-stations"]')!;
+    swap.textContent = '↑↓ 出発・到着を入れ替え'; form.append(swap);
+    const actions = retained.querySelector<HTMLElement>('.actions')!;
+    actions.querySelector('button')!.textContent = f ? '変更して検索' : '検索してお気に入りに保存';
+    form.append(actions);
+    // Simplified searches always compare all lines and up to two transfers.
+    for (const name of ['direction', 'preferred', 'excluded', 'fixed', 'secondTransferAt', 'via0', 'via1', 'via2']) {
+      const field = retained.querySelector<HTMLInputElement | HTMLSelectElement>(`[name="${name}"]`); if (field) field.value = '';
+    }
+    for (const option of retained.querySelectorAll<HTMLOptionElement>('[name="lines"] option')) option.selected = false;
+    (retained.querySelector('[name="transfers"]') as HTMLSelectElement).value = '2';
+  }
   bindStationSearch(container as HTMLElement, data);
   const transfers = container.querySelector<HTMLSelectElement>('[name="transfers"]')!;
   const second = container.querySelector<HTMLElement>('#second-transfer-picker')!;
