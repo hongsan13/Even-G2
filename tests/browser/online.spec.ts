@@ -41,8 +41,12 @@ test('初回接続失敗から自動回復し、表示とお気に入りだけ�
   await expect(page.locator('#auth-form')).toBeHidden();
   await expect(page.locator('#preferences-form')).toBeHidden();
   await expect(page.locator('main > .card:visible')).toHaveCount(2);
+  await expect(page.locator('.live-card .footer-legal')).toHaveCount(0);
+  await expect(page.locator('footer .footer-legal')).toHaveCount(2);
+  await expect(page.locator('footer .footer-legal').first()).not.toHaveAttribute('open');
   await page.clock.fastForward(31000);
   await expect(page.locator('#dataset')).toContainText('2駅 / 1路線 / オンライン検索');
+  await expect(page.locator('footer #footer-data-source')).toContainText('synthetic fixture');
   await expect(page.locator('.hud-primary')).toHaveText('出発駅・到着駅を選んでください');
   await expect(page.locator('#favorite-form')).toBeHidden();
   await page.locator('.route-search > summary').click();

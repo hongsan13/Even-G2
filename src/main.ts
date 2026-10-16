@@ -60,6 +60,7 @@ function invalidate(): void { searchGeneration++; search.cancel(); computedKey =
 function metadata(): void {
   updateAuthState();
   const data = dataset();
+  const attribution = root.querySelector('#footer-data-source'); if (attribution) attribution.textContent = data ? `出典: ${data.source} · 利用条件: ${data.license}` : '出典・利用条件は駅一覧の接続後に表示します。';
   root.querySelector('#dataset')!.innerHTML = data ? `<strong>${escapeHtml(data.title)}</strong><br>${data.demo ? '⚠ 架空データ。乗車案内には使えません。<br>' : ''}
     ${data.stations.length}駅 / ${data.lines.length}路線 / ${data.serverManaged ? 'オンライン検索' : `${data.trips.length}便`}<br>
     出典: ${escapeHtml(data.source)}<br>利用条件: ${escapeHtml(data.license)}<br>
@@ -76,7 +77,7 @@ function metadata(): void {
   jsonTargets.value = jsonTarget;
   root.querySelector<HTMLInputElement>('#auto-update')!.checked = autoUpdate;
   root.querySelector('#connection')!.textContent = nativeLabel;
-  root.querySelector('#debug')!.textContent = `Transit HUD 0.4.5\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
+  root.querySelector('#debug')!.textContent = `Transit HUD 0.4.6\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
 }
 function refreshControls(preserveEditor = false): void {
   const previous = preserveEditor ? root.querySelector<HTMLFormElement>('#favorite-form') : null;

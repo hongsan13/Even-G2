@@ -87,8 +87,16 @@ export function mountSettings(root: HTMLElement): void {
       <p class="hint">設定と時刻表は端末に保存します。位置情報・連絡先・マイクは使用しません。乗車モードは手動で開始し、予定時刻で次の行動を切り替えます。列車への乗車・実際の到着を検知する機能ではありません。</p>
       <details><summary>デバッグ情報・バージョン</summary><pre id="debug"></pre></details>
     </section>
-  </main><footer>Transit HUD 0.4.5 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
+  </main><footer>Transit HUD 0.4.6 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
   if (TRANSIT_SERVICE_URL) {
+    const legal = root.querySelector<HTMLDetailsElement>('.live-card details:not(.saved-routes)');
+    if (legal) {
+      const attribution = document.createElement('p'); attribution.id = 'footer-data-source'; attribution.className = 'hint'; legal.append(attribution);
+      legal.classList.add('footer-legal'); root.querySelector('footer')!.append(legal);
+      const intro = root.querySelector('.live-card > p.hint:not([id])'); if (intro) legal.append(intro);
+    }
+    const guide = document.createElement('details'); guide.className = 'footer-legal'; guide.innerHTML = '<summary>操作ガイド</summary>';
+    guide.append(root.querySelector('#journey-note')!); root.querySelector('footer')!.append(guide);
     const searchCard = root.querySelector('#favorite-editor')!.closest('section.card')!;
     const fold = document.createElement('details'); fold.className = 'route-search';
     fold.innerHTML = '<summary>ルート検索<span>出発・到着を選ぶ</span></summary>';

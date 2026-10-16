@@ -89,3 +89,7 @@ TRANSIT_SERVICE_URL=https://YOUR-SERVICE-ORIGIN npm run pack
 これにより接続先をビルドへ固定し、CSPとパッケージのnetwork whitelistへそのoriginを追加する。認証鍵は入れない。任意URLを利用者に入力させない。生成された`.ehpk`を同じHubプロジェクトへアップロードする。公開先が未定の状態の標準配布物ではオンライン版は有効にならない。
 
 **まだ必要な作業：** Renderへ最新コードを反映、Hubへv0.4.1アップロード、G2実機通信・操作確認。認証事業者を追加する場合はODPTキーをホストのシークレットへ設定し、提供許諾を確認。その後に一般公開を判断する。
+
+## v0.4.6：ODPT有効化・GTFS以外の取込
+
+[Renderでの鍵設定・JR/私鉄追加・公式JSON・事業者間連絡](ODPT_ACTIVATION.md)を参照してください。鍵はサーバーのみで保持し、利用者のHub設定は不要です。

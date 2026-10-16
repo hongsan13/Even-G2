@@ -7,14 +7,15 @@ import { PUBLIC_FEED_ORIGINS, TOEI_FEED } from '../src/config';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { jstDate } from '../src/utils/time';
-import type { Timetable } from '../src/transit/types';
+import { loadJsonRoute, type JsonRoute } from './odpt-json';
+import type { Timetable, Transfer } from '../src/transit/types';
 export class Catalog {
   private feeds: SavedFeed[] = [];
   private refreshing?: Promise<void>;
   private lastAttempt = 0;
   statuses: { id: string; title: string; status: string }[] = [];
-  constructor(private config: { feeds: string[]; odptKey?: string; challengeKey?: string; restrictedApproved: boolean }) {
-    if (!config.feeds.length || config.feeds.length > 8 || config.feeds.some(id => !ALL_FEEDS.some(f => f.id === id))) throw new Error('TRANSIT_FEEDS must select 1–8 catalog IDs');
+  constructor(private config: { feeds: string[]; odptKey?: string; challengeKey?: string; restrictedApproved: boolean; jsonRoutes?: JsonRoute[]; links?: Transfer[] }) {
+    if ((!config.feeds.length && !config.jsonRoutes?.length) || new Set(config.feeds).size !== config.feeds.length || config.feeds.length + (config.jsonRoutes?.length ?? 0) > 8 || config.feeds.some(id => !ALL_FEEDS.some(f => f.id === id))) throw new Error('TRANSIT_FEEDS must select 1–8 catalog IDs');
   }
   async refresh(force = false): Promise<void> {
     this.feeds = this.feeds.filter(f => !f.data.licenseUntil || f.data.licenseUntil >= jstDate(Date.now()));
@@ -30,7 +31,8 @@ export class Catalog {
       const feed = ALL_FEEDS.find(f => f.id === id)!;
       const existing = this.feeds.find(f => f.feedId === id);
       try {
-        if (isAuthFeed(feed) && !this.config.restrictedApproved) throw new Error('Restricted feed approval missing');
+        if (isAuthFeed(feed) && !this.config.restrictedApproved) { this.statuses.push({id,title:feed.title,status:'approval-required'}); continue; }
+        if (isAuthFeed(feed) && !(feed.auth === 'challenge' ? this.config.challengeKey : this.config.odptKey)?.trim()) { this.statuses.push({id,title:feed.title,status:feed.auth === 'challenge' ? 'challenge-key-missing' : 'odpt-key-missing'}); continue; }
         const parse = async (bytes: ArrayBuffer) => parseGtfsZip(new Uint8Array(bytes), feed);
         let next;
         if (id === 'toei' && !existing) {
@@ -51,6 +53,19 @@ export class Catalog {
         this.statuses.push({ id, title: feed.title, status: 'ready' });
       } catch { this.statuses.push({ id, title: feed.title, status: existing ? 'update-failed' : 'unavailable' }); }
     }
+    for (const route of this.config.jsonRoutes ?? []) {
+      const existing = this.feeds.find(f => f.feedId === route.id);
+      let status = 'ready';
+      if (!this.config.restrictedApproved) status = 'approval-required';
+      else if (!route.files && !this.config.challengeKey?.trim()) status = 'challenge-key-missing';
+      else if (route.meta.end < jstDate(Date.now()) || route.meta.licenseUntil && route.meta.licenseUntil < jstDate(Date.now())) status = 'expired';
+      else try {
+        const data = await loadJsonRoute(route, this.config.challengeKey ?? '');
+        const proposed = [...this.feeds.filter(f => f.feedId !== route.id), {data, checkedAt:Date.now(),feedId:route.id}];
+        mergeFeeds(proposed); this.feeds = proposed;
+      } catch { status = existing ? 'update-failed' : 'unavailable'; }
+      this.statuses.push({id:route.id,title:route.meta.title,status});
+    }
   }
   data(now = Date.now()): Timetable {
     const today = jstDate(now);
@@ -59,7 +74,7 @@ export class Catalog {
     // Remove expired licence data from process memory, including expired backup generations.
     this.feeds = this.feeds.filter(f => !f.data.licenseUntil || f.data.licenseUntil >= today);
     if (!usable.length) throw new Error('No usable timetable');
-    const d = mergeFeeds(usable).data;
+    const d = mergeFeeds(usable, this.config.links ?? []).data;
     return { ...d, id: `online-${usable.map(f => `${f.feedId}-${f.checkedAt}`).join('_')}` };
   }
 }
