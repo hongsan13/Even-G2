@@ -5,3 +5,7 @@ releases/*.ehpk
 test-results/
 playwright-report/
 *.log
+
+server-dist/
+.env
+.env.*

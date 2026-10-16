@@ -2,7 +2,7 @@ import type { Settings, Timetable, FavoriteRoute } from '../transit/types';
 import type { HudModel } from '../even/renderer';
 import { jstDate } from '../utils/time';
 import { bindStationSearch, stationLabels } from './stations';
-import { ALL_FEEDS, PUBLIC_FEED_ORIGINS } from '../config';
+import { ALL_FEEDS, PUBLIC_FEED_ORIGINS, TRANSIT_SERVICE_URL } from '../config';
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 }
@@ -23,12 +23,12 @@ export function mountSettings(root: HTMLElement): void {
     <section class="card live-card" aria-labelledby="live-title"><div class="section-heading"><h2 id="live-title">次の行動</h2><span id="connection" class="pill">接続確認中</span></div>
       <div id="hud" class="hud" aria-live="polite"></div>
       <div id="journey-results" aria-live="polite"></div><div id="past-journeys"></div>
-      <div id="routes" class="route-tabs"></div>
+      <div id="routes" class="route-tabs"></div>${TRANSIT_SERVICE_URL ? '<p class="hint">オンライン案内：駅とルートを選ぶだけで利用できます。通信できない場合は新しい案内を取得できません。</p><details><summary>データと利用条件</summary><p class="hint">データ提供：公共交通オープンデータセンター。正確性・完全性は保証されません。駅・事業者の最新案内を確認してください。<a href="https://github.com/hongsan13/Even-G2/issues" target="_blank" rel="noopener noreferrer">アプリのお問い合わせ</a></p></details><button type="button" data-action="sync-online" class="secondary">オンライン駅一覧を更新</button>' : ''}
       <div class="actions"><button data-action="previous" class="secondary">← 前の候補</button><button data-action="next" class="secondary">次の候補 →</button><button data-action="board">この便に乗車</button></div>
       <p id="journey-note" class="hint"></p><p id="status" role="status" class="notice">時刻表を取り込むか、手入力で登録してください。</p>
     </section>
     <section class="card"><div class="section-heading"><h2>お気に入り移動</h2><span class="step">01</span></div><div id="favorite-list"></div><div id="favorite-editor"></div></section>
-    <section class="card"><div class="section-heading"><h2>時刻表データ</h2><span class="step">01</span></div><div id="dataset" class="dataset"></div>
+    ${TRANSIT_SERVICE_URL ? '<details class="card"><summary>詳細設定・端末への手動取込</summary>' : ''}<section class="card"><div class="section-heading"><h2>時刻表データ</h2><span class="step">01</span></div><div id="dataset" class="dataset"></div>
       <div id="feed-list"></div>
       <form id="catalog-form"><label>追加する地域・事業者<select name="feed">${ALL_FEEDS.map(f => `<option value="${e(f.id)}">${e(f.region)} · ${e(f.title)}</option>`).join('')}</select></label>
         <label class="check"><input name="terms" type="checkbox" required>配布元の利用条件を確認して追加・更新する</label><button type="submit">公式データを追加・更新</button></form>
@@ -81,13 +81,13 @@ export function mountSettings(root: HTMLElement): void {
       <details><summary>GTFS-Realtimeのファイルで検証</summary><label>同じGTFSに対応する.pbファイル<input id="realtime-file" type="file" accept=".pb,.bin,.protobuf"></label><p class="hint">2分以上古い情報は使いません。通信・デコード失敗時は予定時刻へ戻ります。</p></details>
     </section>
 
-    <section class="card"><div class="section-heading"><h2>表示とプライバシー</h2><span class="step">03</span></div>
+    ${TRANSIT_SERVICE_URL ? '</details>' : ''}<section class="card"><div class="section-heading"><h2>表示とプライバシー</h2><span class="step">03</span></div>
       <form id="preferences-form"><label>カウントダウン更新<select name="refresh"><option value="10">10秒</option><option value="15" selected>15秒</option><option value="30">30秒</option><option value="60">60秒</option></select></label>
       <label class="check"><input type="checkbox" name="realtime">新しいRealtime情報がある時だけ使う</label><button type="submit">表示設定を保存</button></form>
       <p class="hint">設定と時刻表は端末に保存します。位置情報・連絡先・マイクは使用しません。乗車モードは手動で開始し、予定時刻で次の行動を切り替えます。列車への乗車・実際の到着を検知する機能ではありません。</p>
       <details><summary>デバッグ情報・バージョン</summary><pre id="debug"></pre></details>
     </section>
-  </main><footer>Transit HUD 0.3.3 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
+  </main><footer>Transit HUD 0.4.0 · 移動の判断を、視線の先に。<br>遅延・運休・番線は駅の案内も確認してください。</footer>`;
 }
 export function updateHud(root: HTMLElement, model: HudModel): void {
   root.querySelector('#hud')!.innerHTML = `<p class="hud-title">${e(model.title)}</p><p class="hud-action">${e(model.action)}</p>

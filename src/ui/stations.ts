@@ -6,6 +6,7 @@ export function stationLabels(data: Timetable): Map<string, string> {
   const stationMap = new Map(data.stations.map(s => [s.id, s]));
   const lineMap = new Map(data.lines.map(l => [l.id, l.name]));
   const usage = new Map<string, Set<string>>();
+  for (const station of data.stations) if (station.lineIds?.length) usage.set(station.id, new Set(station.lineIds.map(id => lineMap.get(id) ?? id)));
   for (const trip of data.trips) for (const stop of trip.stops) {
     for (const id of [stop.stopId, stationMap.get(stop.stopId)?.parentId].filter(Boolean) as string[]) {
       const set = usage.get(id) ?? new Set<string>(); set.add(lineMap.get(trip.routeId) ?? trip.routeId); usage.set(id, set);

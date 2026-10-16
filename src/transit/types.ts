@@ -1,4 +1,4 @@
-export interface Station { id: string; name: string; parentId?: string; platform?: string; latitude?: number; longitude?: number }
+export interface Station { id: string; name: string; parentId?: string; platform?: string; lineIds?: string[]; latitude?: number; longitude?: number }
 export interface Line { id: string; name: string; agencyId?: string }
 export type Direction = '0' | '1' | '';
 export interface StopTime { stopId: string; sequence: number; arrival: number | null; departure: number | null; pickup: boolean; dropoff: boolean }
@@ -9,7 +9,7 @@ export interface Calendar { id: string; start: string; end: string; days: boolea
 export interface CalendarException { serviceId: string; date: string; added: boolean }
 export interface Timetable {
   schema: 1; id: string; title: string; source: string; license: string; timezone: 'Asia/Tokyo';
-  importedAt: number; version?: string; validUntil?: string; demo: boolean; licenseUntil?: string;
+  importedAt: number; version?: string; validUntil?: string; demo: boolean; serverManaged?: boolean; licenseUntil?: string;
   stations: Station[]; lines: Line[]; trips: Trip[]; calendars: Calendar[];
   exceptions: CalendarException[]; transfers: Transfer[];
 }

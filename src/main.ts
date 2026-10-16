@@ -5,7 +5,7 @@ import { G2Renderer, hudModel } from './even/renderer';
 import { inputAction } from './even/inputs';
 import { MENU_NEXT, MENU_PREVIOUS, MENU_ROUTE_BASE } from './even/menu';
 import { BrowserStorage, NativeStorage, CacheStorage, ChunkStorage, CompressedStorage, DurableCache, openCache, type StoragePort } from './state/persistence';
-import { readSettings, emptySettings, validateFavorite, autoFavorite, SETTINGS_KEY, DATA_KEY } from './state/store';
+import { readSettings, emptySettings, validateFavorite, autoFavorite, SETTINGS_KEY, DATA_KEY as LOCAL_DATA_KEY } from './state/store';
 import { mountSettings, updateHud, updateFavoriteControls, favoriteEditor, escapeHtml } from './ui/settings';
 import { JourneySearch } from './transit/search';
 import { selectNextDepartures, recommendedDeparture, pastDepartures, BOARDING_LOOKBACK_MINUTES } from './transit/departureSelector';
@@ -16,15 +16,17 @@ import { importGtfs, refreshGtfs, publicHttpsUrl, type RemoteCache } from './tra
 import { decodeRealtime, fetchRealtime } from './transit/realtime';
 import type { Departure, FavoriteRoute, Settings, RealtimeUpdate, Journey, Timetable } from './transit/types';
 import { jstDate, jstWeekday, clock } from './utils/time';
-import { ALL_FEEDS, TOEI_FEED, PUBLIC_FEED_ORIGINS, type AuthKind, isAuthFeed, AUTH_FEEDS } from './config';
+import { ALL_FEEDS, TOEI_FEED, PUBLIC_FEED_ORIGINS, type AuthKind, isAuthFeed, AUTH_FEEDS, TRANSIT_SERVICE_URL } from './config';
 import { savedFeeds, putFeed, mergeFeeds, removeExpiredLicensedFeeds, type SavedFeed } from './transit/feeds';
 import { applyEdits, retainEdits, type TimetableEdit } from './transit/edits';
 import { timetableEditor, transferEditor } from './ui/timetable';
+import { onlineCatalog } from './transit/online';
 import { parseServiceTime } from './utils/time';
 import { importOdpt, fetchOdpt, ODPT_OPERATORS, JSON_LIMIT, CHALLENGE_END } from './transit/odpt/loader';
 import type { OdptMetadata } from './transit/odpt/parser';
 import { refreshAuthGtfs, protectTimetable } from './transit/odpt/authGtfs';
 
+const DATA_KEY = TRANSIT_SERVICE_URL ? `${LOCAL_DATA_KEY}.online` : LOCAL_DATA_KEY;
 const root = document.querySelector<HTMLElement>('#app')!;
 mountSettings(root);
 let bridge: EvenAppBridge | null = null, renderer: G2Renderer | null = null;
@@ -57,7 +59,7 @@ function metadata(): void {
   updateAuthState();
   const data = dataset();
   root.querySelector('#dataset')!.innerHTML = data ? `<strong>${escapeHtml(data.title)}</strong><br>${data.demo ? '⚠ 架空データ。乗車案内には使えません。<br>' : ''}
-    ${data.stations.length}駅 / ${data.lines.length}路線 / ${data.trips.length}便<br>
+    ${data.stations.length}駅 / ${data.lines.length}路線 / ${data.serverManaged ? 'オンライン検索' : `${data.trips.length}便`}<br>
     出典: ${escapeHtml(data.source)}<br>利用条件: ${escapeHtml(data.license)}<br>
     最終取込: ${jstDate(data.importedAt)} ${clock(data.importedAt)} JST<br>有効終了: ${escapeHtml(data.validUntil ?? 'フィード内の運行日による')}<br>版: ${escapeHtml(data.version ?? '記載なし')}`
     : '時刻表はまだ登録されていません。公式に利用可能なGTFS ZIPを端末から取り込むか、時刻表を手入力してください。';
@@ -72,7 +74,7 @@ function metadata(): void {
   jsonTargets.value = jsonTarget;
   root.querySelector<HTMLInputElement>('#auto-update')!.checked = autoUpdate;
   root.querySelector('#connection')!.textContent = nativeLabel;
-  root.querySelector('#debug')!.textContent = `Transit HUD 0.3.3\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
+  root.querySelector('#debug')!.textContent = `Transit HUD 0.4.0\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
 }
 function refreshControls(preserveEditor = false): void {
   const previous = preserveEditor ? root.querySelector<HTMLFormElement>('#favorite-form') : null;
@@ -115,7 +117,7 @@ function draw(now = Date.now()): void {
         computed = result; searching = false; draw();
       }).catch(error => {
         if (generation !== searchGeneration) return;
-        searching = false; searchError = errorMessage(error); message(searchError, true); draw();
+        searching = false; if (data.serverManaged) { computed = []; } searchError = errorMessage(error); message(searchError, true); draw();
       });
     }
     departures = selectNextDepartures(computed, now, favorite.walkingMinutes, favorite.bufferMinutes);
@@ -250,7 +252,16 @@ async function downloadFeed(feed: typeof ALL_FEEDS[number]): Promise<void> {
   await installFeed({ ...result.cache, feedId: feed.id, url: feed.url });
   message('公式時刻表を保存しました。お気に入りは編集できます。');
 }
+async function syncOnline(): Promise<void> {
+  if (!TRANSIT_SERVICE_URL) throw new Error('オンライン接続先が未設定です');
+  const data = await onlineCatalog(TRANSIT_SERVICE_URL);
+  const next = { data, checkedAt: Date.now() };
+  await cachePort.set(DATA_KEY, JSON.stringify(next)); cache = next;
+  updates = []; selectedId = null; riding = undefined; invalidate(); refreshControls(true); draw();
+  message('オンライン駅一覧を更新しました。時刻表の手動取込は不要です。');
+}
 async function refreshRemote(): Promise<void> {
+  if (cache?.data.serverManaged) { await syncOnline(); return; }
   let feeds = savedFeeds(cache);
   if (!feeds.some(f => f.url || f.odpt)) throw new Error('公式データ一覧から配布元を追加するか、公開URLを登録してください');
   message('保存済み時刻表の更新を確認しています…');
@@ -287,7 +298,7 @@ function startTimer(): void {
     const id = autoFavorite(settings, now, manualDate);
     if (!busy && !riding && id !== settings.activeId) void run(() => selectRoute(id, false));
     draw(now);
-    if (!busy && autoUpdate && savedFeeds(cache).some(f => f.url || f.odpt) && !root.querySelector('#favorite-form:focus-within, #timetable-form:focus-within') && now - lastRemoteCheck > 86_400_000) {
+    if (!busy && autoUpdate && (cache?.data.serverManaged || savedFeeds(cache).some(f => f.url || f.odpt)) && !root.querySelector('#favorite-form:focus-within, #timetable-form:focus-within') && now - lastRemoteCheck > 86_400_000) {
       lastRemoteCheck = now; void run(refreshRemote);
     } else if (!busy && settings.useRealtime && remote.realtimeUrl && now - lastRealtimeCheck > 60_000) {
       lastRealtimeCheck = now; void run(refreshRealtime);
@@ -346,6 +357,7 @@ root.addEventListener('click', event => {
         select.innerHTML = '<option value="">路線を選択してください</option>' + records.filter(r => typeof r['owl:sameAs'] === 'string' && String(r['owl:sameAs']).startsWith(`odpt.Railway:${operator}.`)).map(r => { const title = r['odpt:railwayTitle'] as { ja?: string } | undefined; return `<option value="${escapeHtml(String(r['owl:sameAs']))}">${escapeHtml(String(title?.ja ?? r['dc:title'] ?? r['owl:sameAs']))}</option>`; }).join('');
         message('路線を選び、有効期間・祝日を確認して取り込んでください。'); break;
       }
+      case 'sync-online': await syncOnline(); break;
       case 'refresh': await refreshRemote(); await refreshRealtime(); break;
     }
   });
@@ -506,7 +518,10 @@ async function initialize(): Promise<void> {
     autoUpdate = (await preferences.get('transit-hud.auto-update')) !== 'false';
     if (cache) message(cache.data.demo ? '架空サンプルが保存されています。乗車案内には使えません。' : '保存済み時刻表を読み込みました。');
   } catch (error) { settings = emptySettings(); message(`保存内容を読み込めませんでした。${errorMessage(error)}。時刻表を再登録してください。`, true); }
-  if (!cache && await preferences.get('transit-hud.initial-data') !== 'disabled') {
+  if (TRANSIT_SERVICE_URL) {
+    try { await syncOnline(); } catch { message('オンライン駅一覧に接続できません。接続状態を確認し、更新を押してください。', true); }
+  }
+  if (!TRANSIT_SERVICE_URL && !cache && await preferences.get('transit-hud.initial-data') !== 'disabled') {
     try {
       message('都営全線の初期時刻表を準備しています…');
       const response = await fetch(TOEI_FEED.bundle); if (!response.ok) throw new Error('初期時刻表を読み込めません');
@@ -516,7 +531,7 @@ async function initialize(): Promise<void> {
     } catch (error) { message(errorMessage(error), true); }
   }
   refreshControls(); draw(); startTimer(); initializing = false;
-  if (autoUpdate && savedFeeds(cache).some(f => f.url || f.odpt)) { lastRemoteCheck = Date.now(); void run(refreshRemote); }
+  if (!TRANSIT_SERVICE_URL && autoUpdate && (cache?.data.serverManaged || savedFeeds(cache).some(f => f.url || f.odpt))) { lastRemoteCheck = Date.now(); void run(refreshRemote); }
   if (bridge) {
     bridge.onEvenHubEvent(event => {
       const action = inputAction(event); if (!action) return;

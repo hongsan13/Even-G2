@@ -1,3 +1,5 @@
+declare const __TRANSIT_SERVICE_URL__: string;
+export const TRANSIT_SERVICE_URL = typeof __TRANSIT_SERVICE_URL__ === 'string' ? __TRANSIT_SERVICE_URL__ : '';
 export const PUBLIC_FEED_ORIGINS = ['https://api-public.odpt.org', 'https://dataodpt.blob.core.windows.net'];
 export const TOEI_FEED = {
   id: 'toei', title: '東京都交通局 鉄道GTFS', region: '東京',

@@ -1,0 +1,20 @@
+import { test, expect } from '@playwright/test';
+test('初回からトークン・時刻表取込なしで駅選択、サーバー経路検索、再起動', async ({ page }) => {
+  test.skip(process.env.TRANSIT_ONLINE_TEST !== 'true', 'Requires the real local online service and service-configured build');
+  const errors: string[] = [], requests: string[] = [];
+  page.on('pageerror', e => errors.push(e.message)); page.on('request', r => requests.push(r.url()));
+  await page.goto('/'); await expect(page.locator('#dataset')).toContainText('149駅 / 6路線 / オンライン検索');
+  await expect(page.locator('#auth-form')).toBeHidden();
+  await page.locator('#favorite-form [name="from"]').selectOption('438');
+  await page.locator('#favorite-form [name="to"]').selectOption('428');
+  await page.locator('#favorite-form [name="name"]').fill('個人の通学ルート');
+  const query = page.waitForRequest(r => r.url().endsWith('/v1/journeys'));
+  await page.getByRole('button', { name:'ルートを登録', exact:true }).click();
+  const sent = (await query).postData()!; expect(sent).not.toContain('個人の通学ルート');
+  await expect(page.locator('#journey-results')).toContainText('新宿', { timeout:30000 });
+  await expect(page.locator('#routes')).toContainText('個人の通学ルート');
+  expect(requests.some(u => u.includes('api.odpt.org') || u.includes('api-challenge.odpt.org') || u.includes('consumerKey'))).toBe(false);
+  await page.reload(); await expect(page.locator('#routes')).toContainText('個人の通学ルート');
+  await expect(page.locator('#journey-results')).toContainText('新宿', { timeout:30000 });
+  expect(errors).toEqual([]);
+});

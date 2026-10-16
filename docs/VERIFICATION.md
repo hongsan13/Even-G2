@@ -134,3 +134,16 @@ Vitest 89件/8 files成功。新規Productionブラウザ1件でSDKの実際の�
 Vitest 92件成功。関連ブラウザ8件中既存7件成功、新規1件で画面位置の問題を検出。修正後の新規1件再実行成功。編集フォームの同一DOM・下書き・フォーカス・切替ボタンの表示位置・選択保存/再起動を確認。全ブラウザ15件の再実行は今回未実施。TypeScript/Vite/公式pack・差分チェック成功。iPhone/G2実機は未検証。
 
 releases/transit-hud-0.3.3.ehpk、848405 bytes。SHA-256: `0c56485d14a69d3678e833036df032687e694416680125e5bcd99ce6a04bf552`。
+
+## v0.4.0（2026-10-16）
+
+- Vitest **100 passed / 12 files**。APIのCORS/管理認証/要求制限/鍵非公開/許諾未確認の配信停止/クライアントのラベル非送信・期限切れ拒否/一時manifestのorigin制約を含む。
+- 通常productionブラウザ **15 passed / 1 skipped**。オンライン専用ケースは接続先なしの通常ビルドではskip。既存都営実ZIP2件、過去便ロック、フォーム位置保持、JSON取込・認証mockを回帰。
+- 別の接続先設定済みproductionビルドでオンライン専用ブラウザ **1 passed**。実際のローカルNodeサービス＋都営データで、初回駅取得・トークンなし検索・再起動、個人のルート名非送信、ブラウザがODPT認証先へ直接要求しないことを確認。CSPの検証を無効化していない。loopback HTTPは内部テスト専用フラグで許可し、本番packはHTTPS限定。
+- Docker runtimeイメージのビルド/非root起動成功。コンテナのHTTP200 health、149駅/6路線/0便の参照一覧、Workerによる実検索6候補を確認。Nodeのローカル実行も同じ実データで成功。
+- multi-stage Dockerfileのnpm ciはこの環境で完了せず中断。完全ソースビルド成功とは記録しない。依存取得を含まないDockerfile.runtimeは検証済み。
+- TypeScript、フロント/サーバービルド、公式CLI pack、git diff --check成功。CLIのSDK互換表警告あり、min_app_version 2.2.10保持。接続先入りの公式packも成功し、CSP生成を確認。一時manifest生成ロジックをテスト。
+- 本番サービス未配置。認証付き実配信・個別公開許諾・Even Hub実origin/CORS・G2実機・大規模負荷は未検証。既定の認証事業者は無効。ローカル開発環境を永続の公開サーバーとみなさない。
+
+現在の成果物は接続先未設定の互換版: `releases/transit-hud-0.4.0.ehpk`、**848614 bytes**。
+SHA-256: `c81530d70063da7f287fd4a07ce6ece6eded64b31bea39740c8d893e23009491`。
