@@ -3,7 +3,7 @@ import { importGtfs, boundedResponse, type RemoteCache } from '../gtfs/loader';
 import { MAX_ZIP_BYTES } from '../gtfs/parser';
 import { jstDate } from '../../utils/time';
 import type { Timetable } from '../types';
-export type FeedFailure = 'network' | 'timeout' | 'redirect' | 'download' | 'parse' | 'size-limit' | 'merge-limit' | `http-${number}`;
+export type FeedFailure = 'network' | 'timeout' | 'redirect' | 'download' | 'parse' | 'size-limit' | 'merge-limit' | 'expired-data' | `http-${number}`;
 export class FeedImportError extends Error {
   constructor(public readonly reason: FeedFailure) {
     super(`認証付きGTFSを取得できません (${reason})。管理画面で取得状態を確認してください`);
@@ -29,11 +29,12 @@ export async function refreshAuthGtfs(feed: AuthFeed, key: string, cache?: Remot
     stage = 'redirect';
     if (response.url) {
       const final = new URL(response.url);
-      const suffix = original.pathname.replace('/api/v4/files/', '/');
+      const date = original.searchParams.get('date');
+      const suffix = original.pathname.replace('/api/v4/files/', '/').replace(/\.zip$/, date ? `-${date}.zip` : '.zip');
       // Container names vary by licence. Require the exact provider/path/filename on ODPT Azure.
       const azure = final.origin === 'https://dataodpt.blob.core.windows.net' && final.pathname.endsWith(suffix) &&
         /^\/[A-Za-z0-9_-]+\//.test(final.pathname) && final.pathname.split('/').length === suffix.split('/').length + 1;
-      if (!azure && !(final.origin === original.origin && final.pathname === original.pathname)) throw new Error('redirect');
+      if (!azure && !(final.origin === original.origin && final.pathname === original.pathname && final.searchParams.get('date') === original.searchParams.get('date'))) throw new Error('redirect');
     }
     stage = 'download';
     const bytes = await boundedResponse(response, MAX_ZIP_BYTES);

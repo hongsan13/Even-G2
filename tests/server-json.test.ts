@@ -70,3 +70,11 @@ it('管理状態は認証GTFSのHTTPコードを保持し、認証鍵を含め�
   expect(catalog.statuses[0]).toMatchObject({status:'unavailable',reason:'http-403'});
   expect(JSON.stringify(catalog.statuses)).not.toContain('synthetic-private-key');
 });
+
+it('オンラインは9配布元を統合でき、端末版の上限8件は維持する', async () => {
+  api();
+  const routes = Array.from({length:9},(_,i)=>({...route,id:`json-${i}`}));
+  const catalog = new Catalog({feeds:[],jsonRoutes:routes,restrictedApproved:true,challengeKey:'synthetic-key'});
+  await catalog.refresh(); expect(catalog.data().trips).toHaveLength(9);
+  expect(catalog.statuses.every(s=>s.status==='ready')).toBe(true);
+});

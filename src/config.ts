@@ -39,6 +39,13 @@ export const AUTH_FEEDS: AuthFeed[] = [
     url: `https://api.odpt.org/api/v4/files/${operator}/data/${operator}-Train-GTFS.zip`,
     source: `${title}・公共交通オープンデータ協議会`, license: '公共交通オープンデータ基本ライセンス',
     catalog: `https://ckan.odpt.org/dataset/${slug}/resource/${resource}`, bundle: '', auth: 'odpt' as const })),
+  {
+    id: 'auth-YokohamaMunicipal', title: '横浜市営地下鉄 GTFS（通常ODPT認証・20251226版）', region: '関東',
+    url: 'https://api.odpt.org/api/v4/files/odpt/YokohamaMunicipal/Train.zip?date=20251226',
+    source: '横浜市交通局・公共交通オープンデータ協議会', license: '公共交通オープンデータ基本ライセンス',
+    catalog: 'https://ckan.odpt.org/dataset/yokohama_municipal_train/resource/27ed8a34-c89f-4c5c-98af-5950f04183e2',
+    bundle: '', auth: 'odpt',
+  },
 ];
 export const ALL_FEEDS = [...FEED_CATALOG, ...AUTH_FEEDS];
 

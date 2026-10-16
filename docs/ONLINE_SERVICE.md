@@ -56,7 +56,7 @@ docker run --rm -p 127.0.0.1:8080:8080 \
 | 設定名 | 用途 |
 |---|---|
 | `TRANSIT_ALLOWED_ORIGINS` | 管理画面/APIの正確なoriginをカンマ区切り。明示設定がない場合はブラウザ接続を許可しない。Render上は自身の発行URLを自動追加する。`*`にしない。公開の駅一覧・検索APIはv0.4.1で別の公開CORSを使用する。ローカル検証用originを本番へ持ち込まない。 |
-| `TRANSIT_FEEDS` | `toei`など最大8配布元。初期値は`toei`。 |
+| `TRANSIT_FEEDS` | `toei`など最大16配布元。初期値は`toei`。`kanto`で関東10配布元を選択。 |
 | `ODPT_KEY` | 通常ODPTトークン。ホストのシークレット設定へ。 |
 | `ODPT_CHALLENGE_KEY` | チャレンジ専用トークン。参加条件・許諾期間を確認する。 |
 | `ODPT_SERVICE_TERMS_CONFIRMED` | 運用者が一般利用者向けの利用条件を確認した場合のみ`true`。初期値は無効。 |

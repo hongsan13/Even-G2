@@ -1,3 +1,4 @@
+import { MAX_ONLINE_FEEDS } from './settings';
 import { ALL_FEEDS, isAuthFeed } from '../src/config';
 import { parseGtfsZip } from '../src/transit/gtfs/parser';
 import { refreshGtfs } from '../src/transit/gtfs/loader';
@@ -15,7 +16,7 @@ export class Catalog {
   private lastAttempt = 0;
   statuses: { id: string; title: string; status: string; reason?: FeedFailure }[] = [];
   constructor(private config: { feeds: string[]; odptKey?: string; challengeKey?: string; restrictedApproved: boolean; jsonRoutes?: JsonRoute[]; links?: Transfer[] }) {
-    if ((!config.feeds.length && !config.jsonRoutes?.length) || new Set(config.feeds).size !== config.feeds.length || config.feeds.length + (config.jsonRoutes?.length ?? 0) > 8 || config.feeds.some(id => !ALL_FEEDS.some(f => f.id === id))) throw new Error('TRANSIT_FEEDS must select 1–8 catalog IDs');
+    if ((!config.feeds.length && !config.jsonRoutes?.length) || new Set(config.feeds).size !== config.feeds.length || config.feeds.length + (config.jsonRoutes?.length ?? 0) > MAX_ONLINE_FEEDS || config.feeds.some(id => !ALL_FEEDS.some(f => f.id === id))) throw new Error('TRANSIT_FEEDS must select 1–16 catalog IDs');
   }
   async refresh(force = false): Promise<void> {
     this.feeds = this.feeds.filter(f => !f.data.licenseUntil || f.data.licenseUntil >= jstDate(Date.now()));
@@ -47,8 +48,9 @@ export class Catalog {
           if (result.fallback) throw new FeedImportError('reason' in result ? result.reason ?? 'network' : 'network');
           next = result.cache;
         }
+        if (next.data.validUntil && next.data.validUntil < jstDate(Date.now())) throw new FeedImportError('expired-data');
         const proposed = [...this.feeds.filter(f => f.feedId !== id), { data: next.data, checkedAt: Date.now(), feedId: id }];
-        try { mergeFeeds(proposed); } catch { throw new FeedImportError('merge-limit'); } // Retain a working generation.
+        try { mergeFeeds(proposed, [], MAX_ONLINE_FEEDS); } catch { throw new FeedImportError('merge-limit'); } // Retain a working generation.
         this.feeds = proposed;
         this.statuses.push({ id, title: feed.title, status: 'ready' });
       } catch (error) { this.statuses.push({ id, title: feed.title, status: existing ? 'update-failed' : 'unavailable', reason: error instanceof FeedImportError ? error.reason : undefined }); }
@@ -62,7 +64,7 @@ export class Catalog {
       else try {
         const data = await loadJsonRoute(route, this.config.challengeKey ?? '');
         const proposed = [...this.feeds.filter(f => f.feedId !== route.id), {data, checkedAt:Date.now(),feedId:route.id}];
-        mergeFeeds(proposed); this.feeds = proposed;
+        mergeFeeds(proposed, [], MAX_ONLINE_FEEDS); this.feeds = proposed;
       } catch { status = existing ? 'update-failed' : 'unavailable'; }
       this.statuses.push({id:route.id,title:route.meta.title,status});
     }
@@ -74,7 +76,7 @@ export class Catalog {
     // Remove expired licence data from process memory, including expired backup generations.
     this.feeds = this.feeds.filter(f => !f.data.licenseUntil || f.data.licenseUntil >= today);
     if (!usable.length) throw new Error('No usable timetable');
-    const d = mergeFeeds(usable, this.config.links ?? []).data;
+    const d = mergeFeeds(usable, this.config.links ?? [], MAX_ONLINE_FEEDS).data;
     return { ...d, id: `online-${usable.map(f => `${f.feedId}-${f.checkedAt}`).join('_')}` };
   }
 }

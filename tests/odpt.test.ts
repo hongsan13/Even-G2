@@ -126,3 +126,26 @@ describe('認証GTFSの安全な失敗理由', () => {
     expect(JSON.stringify(result)).not.toContain('synthetic-token');
   });
 });
+
+it('横浜市営地下鉄の公式日付指定URLを保持し、別日付・別事業者への転送を拒否', async () => {
+  const feed = AUTH_FEEDS.find(f => f.id === 'auth-YokohamaMunicipal')!;
+  expect(feed.auth).toBe('odpt');
+  const mock = vi.fn().mockImplementation(async () => {
+    const response = new Response(new Uint8Array([1]));
+    Object.defineProperty(response,'url',{value:'https://dataodpt.blob.core.windows.net/files/odpt/YokohamaMunicipal/Train-20251226.zip?sig=synthetic-signature'});
+    return response;
+  });
+  vi.stubGlobal('fetch',mock);
+  const result = await refreshAuthGtfs(feed,'synthetic-key',undefined,async () => data());
+  const url = mock.mock.calls[0][0] as URL;
+  expect(url.searchParams.get('date')).toBe('20251226');
+  expect(url.searchParams.get('acl:consumerKey')).toBe('synthetic-key');
+  expect(JSON.stringify(result)).not.toMatch(/synthetic-key|synthetic-signature/);
+  for (const path of ['odpt/YokohamaMunicipal/Train-20220101.zip','odpt/Other/Train-20251226.zip']) {
+    mock.mockImplementation(async () => {
+      const response = new Response(new Uint8Array([1]));
+      Object.defineProperty(response,'url',{value:`https://dataodpt.blob.core.windows.net/files/${path}`}); return response;
+    });
+    await expect(refreshAuthGtfs(feed,'synthetic-key',undefined,async () => data())).rejects.toMatchObject({reason:'redirect'});
+  }
+});

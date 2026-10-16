@@ -1,3 +1,4 @@
+import { MAX_ONLINE_FEEDS } from './settings';
 import { readFile, stat } from 'node:fs/promises';
 import { fetchOdpt, JSON_LIMIT, ODPT_OPERATORS, CHALLENGE_END } from '../src/transit/odpt/loader';
 import { parseOdpt, type OdptMetadata } from '../src/transit/odpt/parser';
@@ -10,7 +11,7 @@ export interface JsonRoute {
 /** Operator-owned environment configuration, never supplied through the public API. */
 export function jsonRoutes(value = ''): JsonRoute[] {
   const routes: unknown = value ? JSON.parse(value) : [];
-  if (!Array.isArray(routes) || routes.length > 8) throw new Error('Configure at most eight JSON routes');
+  if (!Array.isArray(routes) || routes.length > MAX_ONLINE_FEEDS) throw new Error('Configure at most sixteen JSON routes');
   for (const r of routes) {
     if (!r || typeof r !== 'object' || !/^json-[a-zA-Z0-9-]{1,60}$/.test(r.id) || typeof r.operator !== 'string' || typeof r.railway !== 'string' ||
       !r.railway.startsWith(`odpt.Railway:${r.operator}.`) || !r.meta || typeof r.meta !== 'object' ||

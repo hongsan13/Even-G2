@@ -12,8 +12,8 @@ export function savedFeeds(cache?: RemoteCache): SavedFeed[] {
   const toei = cache.data.stations.some(s => s.id === '438' && s.name === '練馬春日町') && cache.data.lines.some(l => l.id === '4');
   return [{ ...cache, feedId: toei ? 'toei' : 'legacy', url: toei ? TOEI_FEED.url : undefined }];
 }
-export function mergeFeeds(feeds: SavedFeed[], links: Transfer[] = []): RemoteCache {
-  if (!feeds.length || feeds.length > MAX_FEEDS || new Set(feeds.map(f => f.feedId)).size !== feeds.length) throw new Error('保存するデータは重複なしで1〜8件にしてください');
+export function mergeFeeds(feeds: SavedFeed[], links: Transfer[] = [], maxFeeds = MAX_FEEDS): RemoteCache {
+  if (!feeds.length || feeds.length > maxFeeds || new Set(feeds.map(f => f.feedId)).size !== feeds.length) throw new Error(`保存するデータは重複なしで1〜${maxFeeds}件にしてください`);
   const mapped = feeds.map(feed => {
     const d = feed.data;
     const p = (id: string) => ['legacy', 'toei'].includes(feed.feedId) ? id : `${feed.feedId}::${id}`;

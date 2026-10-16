@@ -1,3 +1,12 @@
+import { ALL_FEEDS, AUTH_FEEDS } from '../src/config';
+export const MAX_ONLINE_FEEDS = 16;
+export const KANTO_FEEDS = ['toei', ...AUTH_FEEDS.filter(f => f.region === '関東').map(f => f.id)];
+export function serviceFeeds(value = 'toei'): string[] {
+  const selected = value.split(',').map(s => s.trim()).filter(Boolean);
+  const feeds = [...new Set(selected.flatMap(id => id === 'kanto' ? KANTO_FEEDS : [id]))];
+  if (feeds.length > MAX_ONLINE_FEEDS || feeds.some(id => !ALL_FEEDS.some(f => f.id === id))) throw new Error('Unknown or excessive timetable feeds');
+  return feeds;
+}
 import type { Transfer } from '../src/transit/types';
 export function serviceLinks(value = '[]'): Transfer[] {
   const links: unknown = JSON.parse(value);

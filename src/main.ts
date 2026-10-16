@@ -77,7 +77,7 @@ function metadata(): void {
   jsonTargets.value = jsonTarget;
   root.querySelector<HTMLInputElement>('#auto-update')!.checked = autoUpdate;
   root.querySelector('#connection')!.textContent = nativeLabel;
-  root.querySelector('#debug')!.textContent = `Transit HUD 0.4.7\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
+  root.querySelector('#debug')!.textContent = `Transit HUD 0.4.8\nSDK 0.0.16 / Even App >= 2.2.10\n保存: ${storageLabel}\nG2: ${nativeLabel}\nTimezone: Asia/Tokyo\nGTFS: ${data ? `${data.demo ? 'DEMO' : 'USER DATA'} / ${data.trips.length} trips` : 'none'}\nRealtime: ${realtimeNote}\n最大乗換: 2 / 最大お気に入り: 8\n外部配信元: ${PUBLIC_FEED_ORIGINS.length}\n位置情報・マイク・解析通信: なし`;
 }
 function refreshControls(preserveEditor = false): void {
   const previous = preserveEditor ? root.querySelector<HTMLFormElement>('#favorite-form') : null;
