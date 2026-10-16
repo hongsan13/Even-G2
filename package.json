@@ -1,6 +1,6 @@
 {
   "name": "transit-hud-even-g2",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "private": true,
   "type": "module",
   "engines": {
@@ -15,7 +15,8 @@
     "pack": "npm run build && node scripts/pack.mjs",
     "check": "npm run test && npm run pack",
     "server:build": "vite build --config server/vite.config.ts",
-    "server:start": "node server-dist/index.js"
+    "server:start": "node server-dist/index.js",
+    "pack:online": "TRANSIT_SERVICE_URL=https://transit-hud.onrender.com npm run pack"
   },
   "dependencies": {
     "@evenrealities/even_hub_sdk": "0.0.16",

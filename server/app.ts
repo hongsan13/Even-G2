@@ -26,20 +26,28 @@ async function body(request: IncomingMessage): Promise<unknown> {
   for await (const chunk of request) { size += chunk.length; if (size > 8192) throw new Error('body'); chunks.push(chunk); }
   return JSON.parse(Buffer.concat(chunks).toString());
 }
-export function service(catalog: ServiceCatalog, config: { origins: string[]; adminToken: string; search?: typeof search }) {
+export function service(catalog: ServiceCatalog, config: { origins: string[]; adminToken: string; publicApi?: boolean; search?: typeof search }) {
   let running = 0, refreshRequested = 0;
   const rates = new Map<string, { time: number; count: number }>();
   return createServer(async (request, response) => {
     const send = (status: number, data: unknown) => { response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' }); response.end(JSON.stringify(data)); };
     const origin = request.headers.origin;
+    const path = request.url?.split('?')[0];
+    const publicEndpoint = config.publicApi === true && (path === '/v1/catalog' || path === '/v1/journeys');
     response.setHeader('Cache-Control', 'no-store'); response.setHeader('X-Content-Type-Options', 'nosniff');
     response.setHeader('Referrer-Policy', 'no-referrer'); response.setHeader('Vary', 'Origin');
-    if (origin && !config.origins.includes(origin)) { send(403, { error: 'origin' }); return; }
-    if (origin) response.setHeader('Access-Control-Allow-Origin', origin);
-    response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (origin && !publicEndpoint && !config.origins.includes(origin)) { send(403, { error: 'origin' }); return; }
+    if (publicEndpoint) response.setHeader('Access-Control-Allow-Origin', '*');
+    else if (origin) response.setHeader('Access-Control-Allow-Origin', origin);
+    response.setHeader('Access-Control-Allow-Headers', publicEndpoint ? 'Content-Type' : 'Content-Type, Authorization');
     response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     if (request.method === 'OPTIONS') { response.writeHead(204); response.end(); return; }
-    const path = request.url?.split('?')[0];
+    if (path === '/' && request.method === 'GET') {
+      response.setHeader('Content-Security-Policy', "default-src 'none'; base-uri 'none'; frame-ancestors 'none'");
+      response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      response.end('<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Transit HUD</title><h1>Transit HUD</h1><p>乗車案内サーバーは起動しています。利用者はEven HubのTransit HUDから駅とルートを選択してください。</p><p><a href="/admin">運用者向け管理ページ</a> · <a href="/healthz">接続確認</a></p></html>');
+      return;
+    }
     if ((path === '/admin' || path === '/admin.js') && request.method === 'GET') {
       response.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");
       try { const file = await readFile(resolve(process.cwd(), 'server', path === '/admin' ? 'admin.html' : 'admin.js')); response.writeHead(200, { 'Content-Type': path === '/admin' ? 'text/html; charset=utf-8' : 'text/javascript; charset=utf-8' }); response.end(file); } catch { send(404, { error: 'not found' }); }

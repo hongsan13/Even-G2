@@ -6,9 +6,9 @@ import type { AddressInfo } from 'node:net';
 import type { Server } from 'node:http';
 const servers: Server[] = [];
 afterEach(async () => { await Promise.all(servers.splice(0).map(s => new Promise<void>(r => { s.closeAllConnections(); s.close(() => r()); }))); });
-async function start(search = vi.fn().mockResolvedValue([])) {
+async function start(search = vi.fn().mockResolvedValue([]), publicApi = false) {
   const catalog: ServiceCatalog = { refresh: vi.fn().mockResolvedValue(undefined), data: () => data(), statuses: [{ id:'toei', title:'test', status:'ready' }] };
-  const server = service(catalog, { origins:['https://hub.example'], adminToken:'synthetic-admin-secret', search }); servers.push(server);
+  const server = service(catalog, { origins:['https://hub.example'], adminToken:'synthetic-admin-secret', publicApi, search }); servers.push(server);
   await new Promise<void>(r => server.listen(0,'127.0.0.1',r));
   return { base:`http://127.0.0.1:${(server.address() as AddressInfo).port}`, catalog, search };
 }
@@ -53,4 +53,17 @@ it('Renderの自動URLで管理を開始し、Hub originを推測・無条件許
   expect(() => serviceOrigins('*')).toThrow();
   expect(() => serviceOrigins('https://user:synthetic@example.com')).toThrow();
   expect(() => serviceOrigins('https://example.com/path')).toThrow();
+});
+
+it('Hubのopaque originでも公開案内だけ許可し、管理にはCORSと認証を維持', async () => {
+  const { base } = await start(vi.fn().mockResolvedValue([]), true);
+  expect((await fetch(base + '/')).status).toBe(200);
+  for (const origin of ['null','https://hub.evenrealities.com']) {
+    const preflight = await fetch(`${base}/v1/journeys`, {method:'OPTIONS',headers:{Origin:origin,'Access-Control-Request-Method':'POST'}});
+    expect(preflight.status).toBe(204);expect(preflight.headers.get('access-control-allow-origin')).toBe('*');
+    expect(preflight.headers.get('access-control-allow-credentials')).toBeNull();
+    expect(preflight.headers.get('access-control-allow-headers')).not.toContain('Authorization');
+    expect((await fetch(`${base}/v1/catalog`,{headers:{Origin:origin}})).status).toBe(200);
+    expect((await fetch(`${base}/admin/status`,{headers:{Origin:origin,Authorization:'Bearer synthetic-admin-secret'}})).status).toBe(403);
+  }
 });

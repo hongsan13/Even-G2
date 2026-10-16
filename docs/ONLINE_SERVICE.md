@@ -1,6 +1,6 @@
 # オンライン管理版（v0.4.0）
 
-利用者がODPT登録・トークン入力・GTFS取込をしなくても、駅とルートを選んで案内を取得するための構成。**実装とローカル検証は済んでいるが、公開サービスはまだ運用していない。** 公開先のHTTPS URLが未定のため、リポジトリの標準.ehpkはオンライン接続先未設定の従来互換ビルド。
+利用者がODPT登録・トークン入力・GTFS取込をしなくても、駅とルートを選んで案内を取得するための構成。**v0.4.1の公開先はhttps://transit-hud.onrender.com。** 実HTTPSで駅取得と検索を確認済み。v0.4.1の配布物は接続先入り。以前のサーバーをManual Deployで更新してから使用する。実機は未検証。
 
 ## 構成と提供範囲
 
@@ -26,7 +26,7 @@
 
 ## 初めての配置はRender設定を使う
 
-[初心者向けの操作手順](RENDER_SETUP.md)と[配置開始リンク](https://render.com/deploy?repo=https://github.com/hongsan13/Even-G2)を用意しました。RenderはNode.jsの標準実行環境を使い、Dockerイメージを自分で作らずに配置できます。Docker構成も引き続き使えます。Render上では発行された自身のURLを管理用originに自動追加するため、最初のサーバー起動にHubのorigin入力は不要です。Hub実機の接続許可はURL発行後に確認します。無料構成は休止があり試用向けです。
+[初心者向けの操作手順](RENDER_SETUP.md)と[配置開始リンク](https://render.com/deploy?repo=https://github.com/hongsan13/Even-G2)を用意しました。RenderはNode.jsの標準実行環境を使い、Dockerイメージを自分で作らずに配置できます。Docker構成も引き続き使えます。Render上では発行された自身のURLを管理用originに自動追加するため、最初のサーバー起動にHubのorigin入力は不要です。v0.4.1では公開案内APIだけ匿名クライアント向けCORSを許可し、管理APIは自身のURLなど明示originに限定します。無料構成は休止があり試用向けです。
 
 ## Dockerで起動
 
@@ -55,7 +55,7 @@ docker run --rm -p 127.0.0.1:8080:8080 \
 
 | 設定名 | 用途 |
 |---|---|
-| `TRANSIT_ALLOWED_ORIGINS` | 利用するEven Hub WebViewの正確なoriginをカンマ区切り。明示設定がない場合はブラウザ接続を許可しない。Render上は自身の発行URLを自動追加する。`*`にしない。実機のoriginは未確認なので配置後に確認する。ローカル検証用originを本番へ持ち込まない。 |
+| `TRANSIT_ALLOWED_ORIGINS` | 管理画面/APIの正確なoriginをカンマ区切り。明示設定がない場合はブラウザ接続を許可しない。Render上は自身の発行URLを自動追加する。`*`にしない。公開の駅一覧・検索APIはv0.4.1で別の公開CORSを使用する。ローカル検証用originを本番へ持ち込まない。 |
 | `TRANSIT_FEEDS` | `toei`など最大8配布元。初期値は`toei`。 |
 | `ODPT_KEY` | 通常ODPTトークン。ホストのシークレット設定へ。 |
 | `ODPT_CHALLENGE_KEY` | チャレンジ専用トークン。参加条件・許諾期間を確認する。 |
@@ -65,6 +65,12 @@ docker run --rm -p 127.0.0.1:8080:8080 \
 認証事業者のID：`auth-JR-East`、`auth-Keio`、`auth-Sotetsu`、`auth-Tobu`、`auth-TokyoMetro`、`auth-MIR`、`auth-TWR`、`auth-TamaMonorail`。大きな事業者を同時に選ぶと既存の40,000便/10,000駅制限に達する場合がある。事業者間の徒歩乗換の自動生成は未実装。サーバー版へ端末の手動乗換設定は同期しない。
 
 サーバーは要求本文・トークン・利用者のルートをログ/DBへ記録しない。IPアドレスによる簡易制限はメモリ上の1分窓で、1接続元120要求/分。リバースプロキシ越しでは接続元が共有されるため、ホスト側の制限と合わせて運用する。これは認証基盤や大規模配信対策の代わりではない。CORSもアプリの正規性を証明する仕組みではない。運用先が保存するアクセスログ、保存期間、公開運営者連絡先は公開前に確定する。
+
+## 公開APIと管理APIの分離（v0.4.1）
+
+`/v1/catalog`と`/v1/journeys`だけは、Hub WebViewのopaque originを含む匿名のブラウザクライアント向けに`Access-Control-Allow-Origin: *`を返す。credentialsは許可せず、Authorizationヘッダーも公開プリフライトで許可しない。時刻表全件/認証鍵は返さず、元々認証なしで提供していた駅参照・少数の案内をブラウザから利用可能にするための変更。CORSは利用者認証ではない。
+
+`/admin`、`/admin/status`、`/admin/refresh`等には公開CORSを適用しない。明示originと管理トークンの要件を維持する。`TRANSIT_PUBLIC_API=false`で公開APIも従来のorigin制限に戻せるが、これ自体は認証やアクセス制御の代わりではない。Render側のコード更新が反映されるまではHubからの案内取得は拒否される。
 
 ## オンライン管理
 
@@ -82,4 +88,4 @@ TRANSIT_SERVICE_URL=https://YOUR-SERVICE-ORIGIN npm run pack
 
 これにより接続先をビルドへ固定し、CSPとパッケージのnetwork whitelistへそのoriginを追加する。認証鍵は入れない。任意URLを利用者に入力させない。生成された`.ehpk`を同じHubプロジェクトへアップロードする。公開先が未定の状態の標準配布物ではオンライン版は有効にならない。
 
-**まだ必要な作業：** 公開先の選定/配置、ODPTキーをホストのシークレットへ設定、認証事業者の提供許諾確認、HTTPS/CORSとEven Hubの実際のorigin・G2実機操作の検証。その後に一般公開を判断する。
+**まだ必要な作業：** Renderへ最新コードを反映、Hubへv0.4.1アップロード、G2実機通信・操作確認。認証事業者を追加する場合はODPTキーをホストのシークレットへ設定し、提供許諾を確認。その後に一般公開を判断する。

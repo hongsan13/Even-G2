@@ -104,3 +104,11 @@
 - Render公式JSON Schemaで検証成功。YAMLのoffを文字列として明示。TypeScript・Vitest101件・サーバービルド成功。Render相当の環境設定でローカル起動・149駅/6路線取得を検証。
 - Renderへの操作接続・API認証は環境にないため、アカウント作成・実配置は未実施。登録/ログインと初回配置だけ本人操作とし、URL発行後にこちらで接続先入りHubファイルを作る手順をdocs/RENDER_SETUP.mdへ記載。ODPTトークンは最初の配置では不要。
 - クライアントの変更はなく.ehpkは再生成していない。無料サービスの休止/復帰・上限、有料変更を自動設定しないことを説明。
+
+## 2026-10-16 — v0.4.1：公開Render URLとHub接続ビルド
+
+- ユーザー提供のhttps://transit-hud.onrender.comでhealth200、都営149駅/6路線の参照一覧、実検索6候補を確認。接続先を埋め込んだv0.4.1.ehpkを公式CLIで生成。再生成用pack:onlineを追加。
+- 現行公開サーバーはHub相当originへのプリフライトを403で拒否するため、公開の駅一覧/少数経路だけCORSを許可する変更を実装。opaque originも想定し資格情報を許可しない。管理パスは従来のoriginとトークン要件を維持。一般公開された案内の取得であり、原時刻表や鍵の公開ではない。
+- Vitest102件/12files、TypeScript、サーバービルド、公式pack成功。更新版をローカル起動しopaque originからcatalog200/149駅・管理403を確認。公開HTTPSのCSPをフロントビルドへ含めた。
+- クラウドChromiumからの実HTTPSはERR_CERT_AUTHORITY_INVALIDで未検証。TLS検証は無効にしない。公開サーバーのcurl検証成功と、Hub/G2実機成功を区別する。
+- Renderの自動配置は停止しているため、実サーバーのCORS修正反映は未完了。ユーザーがManual Deploy → Deploy latest commitを実行してLive確認後にHubへ新しいファイルをアップロードする必要がある。アカウント操作の接続/認証はなくこちらからRender配置はしていない。

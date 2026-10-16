@@ -151,3 +151,13 @@ SHA-256: `c81530d70063da7f287fd4a07ce6ece6eded64b31bea39740c8d893e23009491`。
 ## Render配置設定（2026-10-16）
 
 Render公式Blueprint仕様のJSON Schemaでrender.yamlを検証成功。TypeScript・Vitest101件/12files・サーバービルド成功。RENDER_EXTERNAL_URLに検証用HTTPS originを指定し、ローカルでhealth200、catalog200、149駅/6路線、同一originのCORS応答を確認。ワイルドカード/鍵入り/パス付きoriginの拒否も検証。Renderアカウント操作・実配置・Live URLへの通信・実料金表示・G2接続は未実施。.ehpkの変更はなし。
+
+## v0.4.1（2026-10-16）
+
+公開HTTPS: health200、catalog149駅/6路線/serverManaged、練馬春日町438→新宿428で6経路をcurlにより確認。現行公開サーバーではHub相当originのOPTIONSが403であり、最新コードへの再配置が必要。
+
+更新コード: Vitest102件/12files、TypeScript、サーバーVite、サービスURL入りフロントVite/公式pack成功。ローカル最新サーバーでOrigin:nullのcatalog200/149駅/CORS:*、管理パス403を確認。公開CORSにはcredentials/Authorizationを許可せず、管理を同じ条件で開放しない。CSPへ実サービスoriginを含むことを確認。
+
+実HTTPSブラウザはクラウドのERR_CERT_AUTHORITY_INVALIDで未検証。静的クライアントだけローカルから供給してもAPIのTLS検証に失敗。TLS検証は無効化していない。Even Hub/G2実機、更新後の公開CORS、JR等の認証事業者は未検証。無料サービスの休止/再起動による待ち時間あり。
+
+成果物: releases/transit-hud-0.4.1.ehpk、849582 bytes。SHA-256: `ab7d9d0699feb32bd0d784bbf2645fcb3eb56269e046a4a0e4efe192056d938c`。
